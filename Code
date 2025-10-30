@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pitch Deck Viewer</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Base styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Create a container that maintains a 16:9 aspect ratio */
+        #slide-deck-container {
+            position: relative;
+            width: 100%;
+            max-width: 1280px; /* Max width of the deck */
+            margin-left: auto;
+            margin-right: auto;
+            aspect-ratio: 16 / 9;
+            overflow: hidden;
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+        }
+
+        #slide-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* Base class for all slide objects */
+        .slide-object {
+            position: absolute;
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
+
+        /* Class for text objects */
+        .slide-text {
+            white-space: pre-wrap; /* Respect newlines in the text */
+            word-wrap: break-word; /* Break long words */
+        }
+
+        /* Class for image objects */
+        .slide-image {
+            background-size: cover;
+            background-position: center;
+        }
+
+        /* Class for shape objects */
+        .slide-shape {
+            /* Handled by inline styles */
+        }
+        
+        /* Class for table objects */
+        .slide-table {
+            border-collapse: collapse;
+            width: 100%;
+            height: 100%;
+        }
+
+        .slide-table th, .slide-table td {
+            border: 1px solid; /* Border properties will be overridden by inline styles */
+            padding: 8px 12px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        /* Modal styles */
+        #gemini-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        #gemini-modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        #gemini-modal {
+            background-color: #1a1a1a; /* bg-gray-900 */
+            color: #ffffff;
+            padding: 24px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+        #gemini-modal-overlay.visible #gemini-modal {
+            transform: scale(1);
+        }
+
+        /* Loading spinner */
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #FFF;
+            border-bottom-color: #3B82F6; /* blue-500 */
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* On-slide button */
+        .on-slide-button {
+            position: absolute;
+            background-color: #3399FF;
+            color: white;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 1.5vw; /* Responsive font size */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .on-slide-button:hover {
+            background-color: #257fdb;
+            transform: translateY(-2px);
+        }
+
+        /* Source links */
+        .source-link {
+            display: block;
+            font-size: 0.9em;
+            color: #AAAAAA;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 4px;
+            text-decoration: none;
+        }
+        .source-link:hover {
+            color: #3399FF;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold text-center mb-6">Investor Overview - Q4 2025</h1>
+
+        <!-- Slide Deck Container -->
+        <div id="slide-deck-container" class="bg-black">
+            <div id="slide-container">
+                <!-- Slides will be rendered here by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Navigation Controls -->
+        <div class="flex items-center justify-between mt-6 max-w-2xl mx-auto">
+            <button id="prev-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                Previous
+            </button>
+            
+            <button id="speaker-notes-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out">
+                ✨ Generate Speaker Notes
+            </button>
+            
+            <div id="slide-counter" class="text-xl font-medium text-gray-300">
+                Slide 1 / 16
+            </div>
+            
+            <button id="next-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                Next
+            </button>
+        </div>
+    </div>
+
+    <!-- Gemini Modal -->
+    <div id="gemini-modal-overlay">
+        <div id="gemini-modal">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="gemini-modal-title" class="text-2xl font-bold"></h2>
+                <button id="gemini-modal-close" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div id="gemini-modal-content" class="text-gray-300">
+                <!-- Content (loader or text) goes here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONSTANTS ---
+        const deckData = {
+          "theme": {
+            "themeName": "Default Dark",
+            "slideWidth": 1280,
+            "slideHeight": 720,
+            "backgroundColor": "000000",
+            "fontFamily": "Inter",
+            "primaryColor": "FFFFFF",
+            "secondaryColor": "3399FF"
+          },
+          "slides": [
+            {
+              "slideNumber": 1,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/TSA_Logo_White.png", "x": 390, "y": 148, "width": 500, "height": 135 },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/female-soccer-player.jpg", "x": 640, "y": 0, "width": 640, "height": 720, "opacity": 0.5 },
+                { "type": "text", "text": "Play with purpose.\nWin with character.", "x": 50, "y": 300, "width": 540, "height": 120, "fontSize": 44, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "Investor Overview - Q4 2025\nConfidential & Proprietary", "x": 50, "y": 640, "width": 400, "height": 60, "fontSize": 18, "color": "AAAAAA" }
+              ]
+            },
+            {
+              "slideNumber": 2,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Summary", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "text", "text": "Texas Sports Academy is IMG Academy at 1/20th the cost and 500x the scaling potential.", "x": 50, "y": 100, "width": 1180, "height": 60, "fontSize": 36, "fontWeight": "bold", "color": "FFFFFF", "horizontalAlign": "left" },
+                { "type": "shape", "shapeType": "rectangle", "x": 50, "y": 200, "width": 380, "height": 200, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "$100M Raise", "x": 70, "y": 220, "width": 340, "height": 70, "fontSize": 50, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "To accelerate expansion of our proven AI-powered educational model.", "x": 70, "y": 300, "width": 340, "height": 80, "fontSize": 20, "color": "FFFFFF" },
+                { "type": "shape", "shapeType": "rectangle", "x": 450, "y": 200, "width": 380, "height": 200, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "AI-Powered", "x": 470, "y": 220, "width": 340, "height": 70, "fontSize": 50, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "Proprietary technology drives 10x faster learning, leaving 6+ hours for athletics.", "x": 470, "y": 300, "width": 340, "height": 80, "fontSize": 20, "color": "FFFFFF" },
+                { "type": "shape", "shapeType": "rectangle", "x": 850, "y": 200, "width": 380, "height": 200, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "20-25% Margin", "x": 870, "y": 220, "width": 340, "height": 70, "fontSize": 50, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "Proven, capital-efficient model with strong profit per school.", "x": 870, "y": 300, "width": 340, "height": 80, "fontSize": 20, "color": "FFFFFF" },
+                { "type": "text", "text": "AS SEEN IN:", "x": 50, "y": 500, "width": 1180, "height": 30, "fontSize": 18, "fontWeight": "bold", "color": "AAAAAA" },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/media-logos-white.png", "x": 50, "y": 540, "width": 1180, "height": 100, "objectFit": "contain" }
+              ]
+            },
+            {
+              "slideNumber": 3,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Why TSA?", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "text", "text": "GIVE YOUR KID THE EDGE", "x": 50, "y": 80, "width": 1180, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "3399FF", "horizontalAlign": "left" },
+                { "type": "text", "text": "We are the elite sports academy of Alpha School, combining leading academics with athletic excellence. With core academics completed in just two focused hours each morning, students dedicate their afternoons to elite athlete training and life skill development.", "x": 50, "y": 150, "width": 1180, "height": 90, "fontSize": 24, "color": "FFFFFF", "horizontalAlign": "left" },
+                { "type": "text", "text": "3+ Hours", "x": 50, "y": 280, "width": 270, "height": 50, "fontSize": 40, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "Extra-athletic training daily", "x": 50, "y": 330, "width": 270, "height": 30, "fontSize": 20, "color": "FFFFFF" },
+                { "type": "text", "text": "Pro Level", "x": 350, "y": 280, "width": 270, "height": 50, "fontSize": 40, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "Former NBA-NFL-MLB coaches", "x": 350, "y": 330, "width": 270, "height": 30, "fontSize": 20, "color": "FFFFFF" },
+                { "type": "text", "text": "2 Hours", "x": 650, "y": 280, "width": 270, "height": 50, "fontSize": 40, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "Daily academic mastery", "x": 650, "y": 330, "width": 270, "height": 30, "fontSize": 20, "color": "FFFFFF" },
+                { "type": "text", "text": "Top 2%", "x": 950, "y": 280, "width": 270, "height": 50, "fontSize": 40, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "National test scores", "x": 950, "y": 330, "width": 270, "height": 30, "fontSize": 20, "color": "FFFFFF" },
+                { "type": "shape", "shapeType": "rectangle", "x": 50, "y": 390, "width": 1180, "height": 2, "backgroundColor": "555555" },
+                { "type": "text", "text": "The First and Only AI-Powered School", "x": 50, "y": 420, "width": 580, "height": 40, "fontSize": 28, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "TSA personalizes every student's academic journey using advanced AI—preparing them for college and for life.", "x": 50, "y": 470, "width": 580, "height": 90, "fontSize": 22, "color": "FFFFFF" },
+                { "type": "text", "text": "A Truly Scalable Solution", "x": 650, "y": 420, "width": 580, "height": 40, "fontSize": 28, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "For the first time, world-class academics and elite training come together in a model that can scale to every sport and every city.", "x": 650, "y": 470, "width": 580, "height": 90, "fontSize": 22, "color": "FFFFFF" }
+              ]
+            },
+            {
+              "slideNumber": 4,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Our Market: Why Texas?", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/why-texas-slide.jpg", "x": 0, "y": 100, "width": 1280, "height": 620, "objectFit": "contain" }
+              ]
+            },
+            {
+              "slideNumber": 5,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Our Pedagogy: A Better Mousetrap", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "text", "text": "2 HOURS TO LEARN, 4 TO TRIUMPH", "x": 50, "y": 80, "width": 1180, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "3399FF", "horizontalAlign": "left" },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/pedagogy-chart.jpg", "x": 50, "y": 160, "width": 1180, "height": 510, "objectFit": "contain", "borderRadius": 10 }
+              ]
+            },
+            {
+              "slideNumber": 6,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "The TSA Scholar-Athlete Ecosystem", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/ecosystem-chart.jpg", "x": 50, "y": 100, "width": 1180, "height": 570, "objectFit": "contain" }
+              ]
+            },
+            {
+              "slideNumber": 7,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Why Now: Massive Macro Tailwinds", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/why-now-slide.jpg", "x": 0, "y": 100, "width": 1280, "height": 620, "objectFit": "contain" }
+              ]
+            },
+            {
+              "slideNumber": 8,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Our Community: The TSA Family", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "shape", "shapeType": "rectangle", "x": 50, "y": 120, "width": 580, "height": 550, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "OUR PARENTS", "x": 70, "y": 150, "width": 540, "height": 40, "fontSize": 30, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "Community-driven parents striving to be part of something authentic and enriching.", "x": 70, "y": 200, "width": 540, "height": 60, "fontSize": 22, "color": "FFFFFF" },
+                { "type": "text", "text": "• Value fitness, success, and a healthy, active lifestyle.\n• Seek an ambitious, like-minded community for their whole family.\n• Crave authentic content and want to feel part of something bigger.\n• See sport as a path to discipline, resilience, and character.", "x": 70, "y": 280, "width": 540, "height": 300, "fontSize": 22, "color": "FFFFFF", "lineSpacing": 1.5 },
+                { "type": "shape", "shapeType": "rectangle", "x": 650, "y": 120, "width": 580, "height": 550, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "OUR STUDENTS", "x": 670, "y": 150, "width": 540, "height": 40, "fontSize": 30, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "Aspirational athletes passionate about becoming their best self in the world of sport.", "x": 670, "y": 200, "width": 540, "height": 60, "fontSize": 22, "color": "FFFFFF" },
+                { "type": "text", "text": "• Passionate about all aspects of sport, from athletics to business.\n• Motivated to compete to reach their best version of self.\n• Aspire to excel in sports, aiming for a college or professional roster.\n• Thrive in a structured environment that champions excellence.", "x": 670, "y": 280, "width": 540, "height": 300, "fontSize": 22, "color": "FFFFFF", "lineSpacing": 1.5 }
+              ]
+            },
+            {
+              "slideNumber": 9,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Our Team", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/joe-liemandt.jpg", "x": 830, "y": 100, "width": 400, "height": 570, "objectFit": "cover", "borderRadius": 10 },
+                { "type": "text", "text": "Joe Liemandt", "x": 50, "y": 100, "width": 750, "height": 50, "fontSize": 44, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "Founder & Visionary", "x": 50, "y": 150, "width": 750, "height": 40, "fontSize": 30, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "• Visionary billionaire with 40 years of AI experience.\n• Personally invested $650M to revolutionize education.\n• Became a school principal 3 years ago to build the model from the ground up.\n• Unparalleled depth of knowledge in education and technology.", "x": 50, "y": 210, "width": 750, "height": 200, "fontSize": 24, "color": "FFFFFF", "lineSpacing": 1.5 },
+                { "type": "text", "text": "World-Class Advisory Board (Forming)", "x": 50, "y": 430, "width": 750, "height": 40, "fontSize": 30, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "• Elite Coach / Performance Director\n• NIL and Athlete-Branding Expert\n• College Admissions and Recruiting Strategist\n• Sports Psychologist / Mental Performance Coach\n• Technology and Data-Science Advisor\n• Sports Medicine and Nutrition Expert", "x": 50, "y": 480, "width": 750, "height": 210, "fontSize": 22, "color": "FFFFFF", "lineSpacing": 1.5 }
+              ]
+            },
+            {
+              "slideNumber": 10,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Unit Economics (Per 25-Student Microschool)", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "text", "text": "A 'Win-Win-Win' Model", "x": 50, "y": 80, "width": 1180, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "3399FF", "horizontalAlign": "left" },
+                { "type": "shape", "shapeType": "rectangle", "x": 50, "y": 180, "width": 380, "height": 250, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "FAMILIES", "x": 70, "y": 200, "width": 340, "height": 40, "fontSize": 28, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "$5K - $15K", "x": 70, "y": 250, "width": 340, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "Annual Tuition (Net of Vouchers)\nPremium academics & athletics at public school prices.", "x": 70, "y": 320, "width": 340, "height": 90, "fontSize": 20, "color": "FFFFFF" },
+                { "type": "shape", "shapeType": "rectangle", "x": 450, "y": 180, "width": 380, "height": 250, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "COACHES", "x": 470, "y": 200, "width": 340, "height": 40, "fontSize": 28, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "$80K - $100K", "x": 470, "y": 250, "width": 340, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "Net Annual Income\nRun their own microschool with aligned incentives.", "x": 470, "y": 320, "width": 340, "height": 90, "fontSize": 20, "color": "FFFFFF" },
+                { "type": "shape", "shapeType": "rectangle", "x": 850, "y": 180, "width": 380, "height": 250, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "TSA (STRATA)", "x": 870, "y": 200, "width": 340, "height": 40, "fontSize": 28, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "$4K - $5K", "x": 870, "y": 250, "width": 340, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "Profit Per Student\n(20-25% Margin)\nCapital-efficient growth.", "x": 870, "y": 320, "width": 340, "height": 90, "fontSize": 20, "color": "FFFFFF" },
+                { "type": "text", "text": "Coach LLC Economics (25-Student Microschool)", "x": 50, "y": 480, "width": 1180, "height": 30, "fontSize": 22, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "$15,000 Tuition x 25 Students = $375,000 Revenue\n($75K) Real Estate\n($25K) Workshops\n($37.5K) Misc. Expenses\n($100K) Strata Base Fee\n($50K) Strata Referral Fee (67%)\n= $87,500 Coach Net Income", "x": 50, "y": 520, "width": 1180, "height": 180, "fontSize": 20, "color": "AAAAAA", "lineSpacing": 1.3 }
+              ]
+            },
+            {
+              "slideNumber": 11,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Multi-Phase Growth Plan", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "text", "text": "Four Phases to 500,000 Students", "x": 50, "y": 80, "width": 1180, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "FFFFFF", "horizontalAlign": "left" },
+                { "type": "shape", "shapeType": "rectangle", "x": 50, "y": 180, "width": 285, "height": 450, "backgroundColor": "3399FF", "borderRadius": 10 },
+                { "type": "text", "text": "PHASE I", "x": 70, "y": 200, "width": 245, "height": 30, "fontSize": 20, "fontWeight": "bold", "color": "000000" },
+                { "type": "text", "text": "Microschool Blitz", "x": 70, "y": 240, "width": 245, "height": 70, "fontSize": 30, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "• 1,000 microschools (growing to 4,000)\n• 25 students/school\n• Flagships in Lakeway & Carrollton\n• 100k Students", "x": 70, "y": 330, "width": 245, "height": 200, "fontSize": 18, "color": "FFFFFF", "lineSpacing": 1.5 },
+                { "type": "shape", "shapeType": "rectangle", "x": 355, "y": 180, "width": 285, "height": 450, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "PHASE II", "x": 375, "y": 200, "width": 245, "height": 30, "fontSize": 20, "fontWeight": "bold", "color": "AAAAAA" },
+                { "type": "text", "text": "Flagship Campuses", "x": 375, "y": 240, "width": 245, "height": 70, "fontSize": 30, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "• 100 premium locations\n• 1,000 students/campus\n• Top 100 school districts\n• $50M campus buildouts\n• 100k Students", "x": 375, "y": 330, "width": 245, "height": 200, "fontSize": 18, "color": "FFFFFF", "lineSpacing": 1.5 },
+                { "type": "shape", "shapeType": "rectangle", "x": 660, "y": 180, "width": 285, "height": 450, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "PHASE III", "x": 680, "y": 200, "width": 245, "height": 30, "fontSize": 20, "fontWeight": "bold", "color": "AAAAAA" },
+                { "type": "text", "text": "Public School Takeover", "x": 680, "y": 240, "width": 245, "height": 70, "fontSize": 30, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "• 300+ repurposed buildings\n• 300-500 students/site\n• Underutilized facilities\n• Minimal real-estate costs\n• 100-200k Students", "x": 680, "y": 330, "width": 245, "height": 200, "fontSize": 18, "color": "FFFFFF", "lineSpacing": 1.5 },
+                { "type": "shape", "shapeType": "rectangle", "x": 965, "y": 180, "width": 285, "height": 450, "backgroundColor": "1A1A1A", "borderRadius": 10 },
+                { "type": "text", "text": "PHASE IV+", "x": 985, "y": 200, "width": 245, "height": 30, "fontSize": 20, "fontWeight": "bold", "color": "AAAAAA" },
+                { "type": "text", "text": "Pro Team Partnerships", "x": 985, "y": 240, "width": 245, "height": 70, "fontSize": 30, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "• 10 team-branded academies\n• 10,000 students/brand\n• Austin FC, UT, NBA/NFL\n• Team subsidies unlock scale\n• 100k Students", "x": 985, "y": 330, "width": 245, "height": 200, "fontSize": 18, "color": "FFFFFF", "lineSpacing": 1.5 }
+              ]
+            },
+            {
+              "slideNumber": 12,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Financial Projections", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "text", "text": "Clear Path to Market Dominance", "x": 50, "y": 80, "width": 1180, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "FFFFFF", "horizontalAlign": "left" },
+                { "type": "table", "x": 50, "y": 160, "width": 1180, "height": 480, "data": [ ["", "FY2026", "FY2027", "FY2028", "FY2029", "FY2030", "Target"], ["Microschools", "1,000", "2,000", "3,000", "4,000", "4,000", "4,000"], ["Heritage Schools", "10", "20", "50", "100", "200", "500"], ["Flagship Schools", "2", "5", "10", "25", "50", "100"], ["Pro Academies", "-", "-", "1", "2", "5", "10"], ["Total # of Students", "31,000", "63,000", "115,000", "185,000", "280,000", "500,000"], ["Revenue", "$525M", "$1.08B", "$1.94B", "$3.25B", "$5.06B", "$9.25B"], ["EBITDA", "$125M", "$286M", "$524M", "$908M", "$1.46B", "$3.38B"] ], "headerRow": true, "headerColor": "3399FF", "headerFontColor": "000000", "rowColors": ["1A1A1A", "0A0A0A"], "fontColor": "FFFFFF", "fontSize": 20, "borderColor": "333333", "fontWeight": "bold" },
+                { "type": "text", "text": "IMG Academy sold for $1.25B with 1,000 students at $100,000 tuition ($100M Revenue)", "x": 50, "y": 660, "width": 1180, "height": 30, "fontSize": 18, "color": "AAAAAA", "horizontalAlign": "center" }
+              ]
+            },
+            {
+              "slideNumber": 13,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Competitive Landscape", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "text", "text": "An Unassailable Moat", "x": 50, "y": 80, "width": 1180, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "FFFFFF", "horizontalAlign": "left" },
+                { "type": "table", "x": 50, "y": 180, "width": 1180, "height": 450, "data": [ ["Competitor", "Cost", "AI Learning", "Elite Athletics", "Scalable", "Proven Results"], ["Texas Sports Academy", "$5-15k", "✓", "✓", "✓", "✓"], ["IMG Academy", "$100k", "✗", "✓", "✗", "✓"], ["Traditional Private", "$15-70k", "✗", "✗", "✗", "✗"], ["Club Sports Programs", "$3-10k", "✗", "✓", "✗", "✗"] ], "headerRow": true, "headerColor": "3399FF", "headerFontColor": "000000", "rowColors": ["1A1A1A", "0A0A0A"], "fontColor": "FFFFFF", "fontSize": 24, "borderColor": "333333", "fontWeight": "bold", "columnWidths": [380, 200, 200, 200, 200, 200] }
+              ]
+            },
+            {
+              "slideNumber": 14,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Media Traction", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "text", "text": "Recognized as the Future of Education", "x": 50, "y": 80, "width": 1180, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "FFFFFF", "horizontalAlign": "left" },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/media-slide-1.png", "x": 50, "y": 170, "width": 580, "height": 250, "objectFit": "contain" },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/media-slide-2.png", "x": 650, "y": 170, "width": 580, "height": 250, "objectFit": "contain" },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/media-slide-3.png", "x": 50, "y": 440, "width": 580, "height": 250, "objectFit": "contain" },
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/pitch-deck/media-slide-4.png", "x": 650, "y": 440, "width": 580, "height": 250, "objectFit": "contain" }
+              ]
+            },
+            {
+              "slideNumber": 15,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "text", "text": "Required Capital", "x": 50, "y": 30, "width": 1180, "height": 50, "fontSize": 24, "fontWeight": "bold", "color": "AAAAAA", "horizontalAlign": "left" },
+                { "type": "text", "text": "Funding to Accelerate Expansion", "x": 50, "y": 80, "width": 1180, "height": 60, "fontSize": 50, "fontWeight": "bold", "color": "FFFFFF", "horizontalAlign": "left" },
+                { "type": "text", "text": "$100M", "x": 50, "y": 200, "width": 300, "height": 120, "fontSize": 120, "fontWeight": "bold", "color": "3399FF" },
+                { "type": "text", "text": "USE OF FUNDS", "x": 400, "y": 210, "width": 830, "height": 40, "fontSize": 30, "fontWeight": "bold", "color": "AAAAAA" },
+                { "type": "text", "text": "$65M", "x": 400, "y": 260, "width": 250, "height": 70, "fontSize": 60, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "Marketing (Acquisition)", "x": 400, "y": 330, "width": 250, "height": 30, "fontSize": 22, "color": "FFFFFF" },
+                { "type": "text", "text": "$25M", "x": 680, "y": 260, "width": 250, "height": 70, "fontSize": 60, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "Flagship Buildouts", "x": 680, "y": 330, "width": 250, "height": 30, "fontSize": 22, "color": "FFFFFF" },
+                { "type": "text", "text": "$10M", "x": 960, "y": 260, "width": 250, "height": 70, "fontSize": 60, "fontWeight": "bold", "color": "FFFFFF" },
+                { "type": "text", "text": "Team", "x": 960, "y": 330, "width": 250, "height": 30, "fontSize": 22, "color": "FFFFFF" },
+                { "type": "shape", "shapeType": "rectangle", "x": 50, "y": 420, "width": 1180, "height": 2, "backgroundColor": "555555" },
+                { "type": "text", "text": "THE ASK", "x": 50, "y": 450, "width": 580, "height": 40, "fontSize": 30, "fontWeight": "bold", "color": "AAAAAA" },
+                { "type": "text", "text": "• $100M at $1B Pre-Money\n• Funds growth to 4,000 microschools (~100k students)\n• Target: U.S. family offices & firms passionate about education", "x": 50, "y": 500, "width": 580, "height": 150, "fontSize": 24, "color": "FFFFFF", "lineSpacing": 1.5 },
+                { "type": "text", "text": "THE GOAL", "x": 650, "y": 450, "width": 580, "height": 40, "fontSize": 30, "fontWeight": "bold", "color": "AAAAAA" },
+                { "type": "text", "text": "With the right capital, we will redefine education globally and build a $50B+ business.", "x": 650, "y": 500, "width": 580, "height": 150, "fontSize": 24, "color": "FFFFFF", "lineSpacing": 1.5 }
+              ]
+            },
+            {
+              "slideNumber": 16,
+              "backgroundColor": "000000",
+              "objects": [
+                { "type": "image", "url": "https://storage.googleapis.com/gemini-generative-ai-docs/TSA_Logo_White.png", "x": 390, "y": 208, "width": 500, "height": 135 },
+                { "type": "text", "text": "Play with purpose. Win with character.", "x": 50, "y": 360, "width": 1180, "height": 60, "fontSize": 36, "fontWeight": "bold", "color": "FFFFFF", "horizontalAlign": "center" },
+                { "type": "text", "text": "Confidential & Proprietary", "x": 50, "y": 660, "width": 1180, "height": 30, "fontSize": 18, "color": "AAAAAA", "horizontalAlign": "center" }
+              ]
+            }
+          ]
+        };
+
+        const apiKey = ""; // Leave this as-is, it will be handled by the environment
+        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        
+        // --- STATE & DOM ELEMENTS ---
+        let currentSlideIndex = 0;
+        const slides = deckData.slides;
+        const totalSlides = slides.length;
+        const baseWidth = deckData.theme.slideWidth;
+        const baseHeight = deckData.theme.slideHeight;
+
+        const slideContainer = document.getElementById('slide-container');
+        const prevButton = document.getElementById('prev-slide');
+        const nextButton = document.getElementById('next-slide');
+        const slideCounter = document.getElementById('slide-counter');
+        const speakerNotesButton = document.getElementById('speaker-notes-btn');
+        
+        const modalOverlay = document.getElementById('gemini-modal-overlay');
+        const modal = document.getElementById('gemini-modal');
+        const modalTitle = document.getElementById('gemini-modal-title');
+        const modalContent = document.getElementById('gemini-modal-content');
+        const modalCloseButton = document.getElementById('gemini-modal-close');
+
+        // --- GEMINI API FUNCTIONS ---
+
+        /**
+         * Utility to sleep for a given time.
+         * @param {number} ms - Milliseconds to sleep.
+         */
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        /**
+         * Calls the Gemini API with exponential backoff.
+         * @param {string} systemPrompt - The system instruction for the model.
+         * @param {string} userPrompt - The user's query.
+         * @param {boolean} useGrounding - Whether to enable Google Search grounding.
+         * @returns {Promise<{text: string, sources: Array<{uri: string, title: string}>}>}
+         */
+        async function callGemini(systemPrompt, userPrompt, useGrounding = false) {
+            const payload = {
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            if (useGrounding) {
+                payload.tools = [{ "google_search": {} }];
+            }
+            
+            let attempts = 0;
+            const maxAttempts = 5;
+            let delay = 1000; // 1 second
+
+            while (attempts < maxAttempts) {
+                try {
+                    const response = await fetch(geminiApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429 || response.status >= 500) {
+                            // Throttling or server error, wait and retry
+                            throw new Error(`API Error: ${response.status}`);
+                        } else {
+                            // Client-side error, don't retry
+                            const errorResult = await response.json();
+                            console.error("Gemini API client error:", errorResult);
+                            return { text: "Error calling API. Please check console.", sources: [] };
+                        }
+                    }
+
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        const text = candidate.content.parts[0].text;
+                        let sources = [];
+                        const groundingMetadata = candidate.groundingMetadata;
+
+                        if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                            sources = groundingMetadata.groundingAttributions
+                                .map(attribution => ({
+                                    uri: attribution.web?.uri,
+                                    title: attribution.web?.title,
+                                }))
+                                .filter(source => source.uri && source.title);
+                        }
+                        
+                        return { text, sources };
+                    } else {
+                         throw new Error("Invalid API response structure.");
+                    }
+
+                } catch (error) {
+                    console.warn(`Attempt ${attempts + 1} failed: ${error.message}. Retrying in ${delay}ms...`);
+                    attempts++;
+                    await sleep(delay);
+                    delay *= 2; // Exponential backoff
+                }
+            }
+            
+            return { text: "Error: The API is currently unavailable. Please try again later.", sources: [] };
+        }
+
+        // --- MODAL FUNCTIONS ---
+
+        /**
+         * Displays the modal.
+         * @param {string} title - The title to show in the modal header.
+         * @param {string} contentHtml - The HTML content to display.
+         * @param {boolean} isLoading - Whether to show the loading spinner.
+         */
+        function showModal(title, contentHtml, isLoading = false) {
+            modalTitle.textContent = title;
+            if (isLoading) {
+                modalContent.innerHTML = '<div class="flex justify-center"><div class="loader"></div></div>';
+            } else {
+                modalContent.innerHTML = contentHtml;
+            }
+            modalOverlay.classList.add('visible');
+        }
+
+        /**
+         * Hides the modal.
+         */
+        function hideModal() {
+            modalOverlay.classList.remove('visible');
+        }
+
+        // --- SLIDE & HELPER FUNCTIONS ---
+
+        /**
+         * Converts a pixel value from the JSON to a responsive percentage.
+         * @param {number} value - The pixel value.
+         * @param {'width' | 'height'} dimension - The dimension to scale against.
+         * @returns {string} - The percentage string (e.g., "10.5%").
+         */
+        function toPercent(value, dimension) {
+            if (dimension === 'width') {
+                return (value / baseWidth) * 100 + '%';
+            } else {
+                return (value / baseHeight) * 100 + '%';
+            }
+        }
+        
+        /**
+         * Calculates responsive font size based on container width.
+         * @param {number} fontSize - The base font size from JSON.
+         * @returns {string}
+         */
+        function toResponsiveFontSize(fontSize) {
+            const scaledVw = (fontSize / baseWidth) * 100;
+            const minPx = Math.max(10, fontSize / 3);
+            return `clamp(${minPx.toFixed(2)}px, ${scaledVw.toFixed(4)}vw, ${fontSize}px)`;
+        }
+        
+        /**
+         * Adds a # prefix to a hex color if missing.
+         * @param {string} color - The hex color string.
+         * @returns {string}
+         */
+        function formatColor(color) {
+            if (!color) return null;
+            return color.startsWith('#') ? color : `#${color}`;
+        }
+
+        /**
+         * Extracts all text content from a slide object.
+         * @param {object} slide - The slide data from JSON.
+         * @returns {string} - A concatenated string of all text.
+         */
+        function extractTextFromSlide(slide) {
+            let allText = [];
+            
+            function findText(obj) {
+                if (obj.type === 'text' && obj.text) {
+                    allText.push(obj.text);
+                }
+                if (obj.type === 'table' && obj.data) {
+                    obj.data.forEach(row => {
+                        row.forEach(cell => allText.push(cell));
+                    });
+                }
+            }
+            
+            slide.objects.forEach(findText);
+            return allText.join('\n');
+        }
+
+        /**
+         * Formats Gemini's text response (with markdown-like bullets) into HTML.
+         * @param {string} text - The raw text from the API.
+         * @returns {string} - HTML formatted string.
+         */
+        function formatTextToHtml(text) {
+            return text
+                .split('\n')
+                .map(line => {
+                    line = line.trim();
+                    if (line.startsWith('•') || line.startsWith('*') || line.startsWith('-')) {
+                        return `<li class="ml-4 mb-2">${line.substring(1).trim()}</li>`;
+                    }
+                    if (line.length > 0) {
+                        return `<p class="mb-3">${line}</p>`;
+                    }
+                    return '';
+                })
+                .join('')
+                .replace(/<\/li><li/g, '</li></ul><ul><li'); // Handle multiple lists
+        }
+        
+        /**
+         * Formats an array of source objects into HTML links.
+         * @param {Array<{uri: string, title: string}>} sources - The sources from grounding.
+         * @returns {string} - HTML string of formatted links.
+         */
+        function formatSources(sources) {
+            if (!sources || sources.length === 0) return '';
+            
+            let html = '<h4 class="font-bold text-lg mt-6 mb-2 text-gray-100">Sources:</h4>';
+            html += '<div>';
+            sources.forEach(source => {
+                html += `<a href="${source.uri}" target="_blank" rel="noopener noreferrer" class="source-link" title="${source.title}">${source.title}</a>`;
+            });
+            html += '</div>';
+            return html;
+        }
+        
+        /**
+         * Creates a table element from JSON data.
+         * @param {object} obj - The table object from the JSON.
+         * @returns {HTMLTableElement} - The constructed table element.
+         */
+        function createTableElement(obj) {
+            const table = document.createElement('table');
+            table.className = 'slide-object slide-table';
+            
+            const tableWrapper = document.createElement('div');
+            tableWrapper.className = 'slide-object';
+            tableWrapper.style.left = toPercent(obj.x, 'width');
+            tableWrapper.style.top = toPercent(obj.y, 'height');
+            tableWrapper.style.width = toPercent(obj.width, 'width');
+            tableWrapper.style.height = toPercent(obj.height, 'height');
+            tableWrapper.style.overflow = 'hidden'; // Contain the table
+
+            const data = obj.data || [];
+            const headerRow = obj.headerRow || false;
+            const rowColors = obj.rowColors || ['#FFFFFF', '#F0F0F0'];
+            const fontColor = formatColor(obj.fontColor) || '#000000';
+            const borderColor = formatColor(obj.borderColor) || '#DDDDDD';
+            const headerColor = formatColor(obj.headerColor) || rowColors[0];
+            const headerFontColor = formatColor(obj.headerFontColor) || fontColor;
+            const baseFontSize = obj.fontSize || 16;
+            const columnWidths = obj.columnWidths || [];
+
+            let head, body;
+
+            if (headerRow && data.length > 0) {
+                head = table.createTHead();
+                const row = head.insertRow();
+                row.style.backgroundColor = headerColor;
+                data[0].forEach((cellData, index) => {
+                    const th = document.createElement('th');
+                    th.textContent = cellData;
+                    th.style.color = headerFontColor;
+                    th.style.borderColor = borderColor;
+                    th.style.fontWeight = obj.fontWeight || 'bold';
+                    th.style.fontSize = toResponsiveFontSize(baseFontSize * 1.1);
+                    if(columnWidths[index]) {
+                        th.style.width = toPercent(columnWidths[index], 'width');
+                    }
+                    if(cellData === '✓' || cellData === '✗') {
+                        th.style.textAlign = 'center';
+                    }
+                    row.appendChild(th);
+                });
+            }
+
+            body = table.createTBody();
+            const dataStartIndex = headerRow ? 1 : 0;
+            for (let i = dataStartIndex; i < data.length; i++) {
+                const row = body.insertRow();
+                const colorIndex = (i - dataStartIndex) % rowColors.length;
+                row.style.backgroundColor = formatColor(rowColors[colorIndex]);
+                
+                data[i].forEach((cellData, index) => {
+                    const td = row.insertCell();
+                    td.textContent = cellData;
+                    td.style.color = fontColor;
+                    td.style.borderColor = borderColor;
+                    td.style.fontWeight = obj.fontWeight || 'normal';
+                    td.style.fontSize = toResponsiveFontSize(baseFontSize);
+                    
+                    if(cellData === '✓' || cellData === '✗') {
+                        td.style.textAlign = 'center';
+                        td.style.fontSize = toResponsiveFontSize(baseFontSize * 1.2);
+                        td.style.color = cellData === '✓' ? '#22C55E' : '#EF4444'; // green/red
+                    }
+                    row.appendChild(td);
+                });
+            }
+
+            tableWrapper.appendChild(table);
+            return tableWrapper;
+        }
+
+        /**
+         * Renders the specified slide in the container.
+         * @param {number} slideIndex - The index of the slide to render.
+         */
+        function renderSlide(slideIndex) {
+            const slide = slides[slideIndex];
+            if (!slide) return;
+
+            slideContainer.innerHTML = '';
+            slideContainer.style.backgroundColor = formatColor(slide.backgroundColor || deckData.theme.backgroundColor);
+
+            slide.objects.forEach(obj => {
+                let el;
+                switch (obj.type) {
+                    case 'text':
+                        el = document.createElement('div');
+                        el.className = 'slide-object slide-text';
+                        el.textContent = obj.text;
+                        el.style.color = formatColor(obj.color || deckData.theme.primaryColor);
+                        el.style.fontSize = toResponsiveFontSize(obj.fontSize || 18);
+                        el.style.fontWeight = obj.fontWeight || 'normal';
+                        el.style.textAlign = obj.horizontalAlign || 'left';
+                        el.style.lineHeight = obj.lineSpacing || 1.2;
+                        break;
+                    case 'image':
+                        el = document.createElement('div');
+                        el.className = 'slide-object slide-image';
+                        el.style.backgroundImage = `url(${obj.url})`;
+                        el.style.opacity = obj.opacity || 1;
+                        el.style.backgroundSize = obj.objectFit || 'cover';
+                        if (obj.borderRadius) {
+                            el.style.borderRadius = toPercent(obj.borderRadius, 'width');
+                        }
+                        const img = new Image();
+                        img.onerror = () => {
+                            el.style.backgroundImage = 'none';
+                            el.style.backgroundColor = '#222';
+                            el.innerHTML = `<span class="text-red-500 p-2 text-xs">Image not found:<br>${obj.url.split('/').pop()}</span>`;
+                        };
+                        img.src = obj.url;
+                        break;
+                    case 'shape':
+                        el = document.createElement('div');
+                        el.className = 'slide-object slide-shape';
+                        el.style.backgroundColor = formatColor(obj.backgroundColor);
+                        if (obj.borderRadius) {
+                            el.style.borderRadius = toPercent(obj.borderRadius, 'width');
+                        }
+                        break;
+                    case 'table':
+                        el = createTableElement(obj);
+                        break;
+                    default:
+                        console.warn('Unknown object type:', obj.type);
+                        return;
+                }
+                if (obj.type !== 'table') {
+                    el.style.left = toPercent(obj.x, 'width');
+                    el.style.top = toPercent(obj.y, 'height');
+                    el.style.width = toPercent(obj.width, 'width');
+                    el.style.height = toPercent(obj.height, 'height');
+                }
+                slideContainer.appendChild(el);
+            });
+
+            // --- SPECIAL GEMINI FEATURE ---
+            // Add "Analyze" button only to slide 13
+            if (slide.slideNumber === 13) {
+                const analyzeButton = document.createElement('button');
+                analyzeButton.className = 'on-slide-button';
+                analyzeButton.textContent = '✨ Analyze Competitors';
+                analyzeButton.style.left = toPercent(900, 'width'); // Position it on the slide
+                analyzeButton.style.top = toPercent(85, 'height');
+                analyzeButton.addEventListener('click', handleAnalyzeCompetitors);
+                slideContainer.appendChild(analyzeButton);
+            }
+
+            updateControls();
+        }
+
+        /**
+         * Updates the state and text of navigation controls.
+         */
+        function updateControls() {
+            slideCounter.textContent = `Slide ${currentSlideIndex + 1} / ${totalSlides}`;
+            prevButton.disabled = (currentSlideIndex === 0);
+            nextButton.disabled = (currentSlideIndex === totalSlides - 1);
+        }
+
+        // --- EVENT HANDLERS ---
+
+        /**
+         * Handles the click for "Generate Speaker Notes".
+         */
+        async function handleGenerateSpeakerNotes() {
+            const slide = slides[currentSlideIndex];
+            const slideText = extractTextFromSlide(slide);
+            
+            const systemPrompt = "You are a world-class pitch coach. You will be given the content of a pitch deck slide. Generate compelling, concise speaker notes for the presenter. The notes should expand on the slide's points, not just repeat them, and should be in a conversational, professional tone. Format the notes as bullet points.";
+            const userPrompt = `Generate speaker notes for this slide:\n\n${slideText}`;
+            
+            showModal("Generating Speaker Notes...", "", true);
+            
+            const { text } = await callGemini(systemPrompt, userPrompt, false);
+            const htmlContent = formatTextToHtml(text);
+            
+            showModal("✨ Speaker Notes", `<ul>${htmlContent}</ul>`);
+        }
+
+        /**
+         * Handles the click for "Analyze Competitors" (Slide 13).
+         */
+        async function handleAnalyzeCompetitors() {
+            const systemPrompt = "You are a market analyst. Summarize the provided search results about the youth sports academy market in 3-4 key bullet points. Focus on IMG Academy's business model, cost, and the general 'club sports' industry.";
+            const userPrompt = "Find recent news or analysis on the youth sports academy market, focusing on IMG Academy's business model and the 'club sports' industry.";
+
+            showModal("Analyzing Market...", "", true);
+
+            const { text, sources } = await callGemini(systemPrompt, userPrompt, true);
+            const htmlContent = `<ul>${formatTextToHtml(text)}</ul>` + formatSources(sources);
+
+            showModal("✨ Market Analysis", htmlContent);
+        }
+
+
+        // --- EVENT LISTENERS ---
+        prevButton.addEventListener('click', () => {
+            if (currentSlideIndex > 0) {
+                currentSlideIndex--;
+                renderSlide(currentSlideIndex);
+            }
+        });
+
+        nextButton.addEventListener('click', () => {
+            if (currentSlideIndex < totalSlides - 1) {
+                currentSlideIndex++;
+                renderSlide(currentSlideIndex);
+            }
+        });
+        
+        speakerNotesButton.addEventListener('click', handleGenerateSpeakerNotes);
+        
+        modalCloseButton.addEventListener('click', hideModal);
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) {
+                hideModal();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') {
+                nextButton.click();
+            } else if (e.key === 'ArrowLeft') {
+                prevButton.click();
+            } else if (e.key === 'Escape') {
+                hideModal();
+            }
+        });
+
+        // --- INITIAL RENDER ---
+        renderSlide(currentSlideIndex);
+
+    </script>
+
+</body>
+</html>
+
