@@ -1403,6 +1403,56 @@
         // Chat history for context
         let chatHistory = [];
 
+        // Klair MCP proxy configuration
+        const KLAIR_PROXY_URL = 'http://localhost:3001';
+        let klairConnected = false;
+        let klairTools = [];
+
+        // Check Klair connection on load
+        async function checkKlairConnection() {
+            try {
+                const response = await fetch(`${KLAIR_PROXY_URL}/api/status`, { method: 'GET' });
+                if (response.ok) {
+                    const data = await response.json();
+                    klairConnected = data.connected;
+                    klairTools = data.tools || [];
+                    updateChatbotStatus(klairConnected);
+                    if (klairConnected) {
+                        addChatMessage(`Connected to Klair MCP with ${klairTools.length} tools available.`, 'system');
+                    }
+                }
+            } catch (e) {
+                klairConnected = false;
+                updateChatbotStatus(false);
+            }
+        }
+
+        // Update chatbot status indicator
+        function updateChatbotStatus(connected) {
+            const statusDot = document.querySelector('#chatbot-header .status-dot');
+            if (statusDot) {
+                statusDot.style.backgroundColor = connected ? '#22c55e' : '#f59e0b';
+                statusDot.title = connected ? 'Connected to Klair MCP' : 'Using Gemini (Klair proxy not running)';
+            }
+        }
+
+        // Call Klair MCP tool via proxy
+        async function callKlairTool(toolName, args) {
+            try {
+                const response = await fetch(`${KLAIR_PROXY_URL}/api/tools/${toolName}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(args)
+                });
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (e) {
+                console.error('Klair tool call error:', e);
+            }
+            return null;
+        }
+
         // --- GEMINI API FUNCTIONS ---
 
         /**
@@ -2117,7 +2167,7 @@
 
         /**
          * Handles chatbot form submission.
-         * Integrates with Klair MCP for data queries.
+         * Tries Klair MCP first, falls back to Gemini.
          */
         async function handleChatSubmit(e) {
             e.preventDefault();
@@ -2135,7 +2185,52 @@
             // Add to chat history
             chatHistory.push({ role: 'user', content: message });
 
-            const systemPrompt = `You are Klair, an AI assistant connected to a pitch deck viewer. You have access to the current deck data and can help users:
+            // Show typing indicator
+            const typingMsg = document.createElement('div');
+            typingMsg.className = 'chat-message assistant';
+            typingMsg.innerHTML = '<span class="loader" style="width:20px;height:20px;border-width:2px;"></span>';
+            chatbotMessages.appendChild(typingMsg);
+
+            try {
+                let responseText = '';
+
+                // Try Klair MCP if connected
+                if (klairConnected && klairTools.length > 0) {
+                    // Check if user is asking about specific data that Klair tools can provide
+                    const lowerMessage = message.toLowerCase();
+
+                    // Look for matching tools
+                    for (const tool of klairTools) {
+                        const toolLower = tool.name.toLowerCase();
+                        if (lowerMessage.includes(toolLower) ||
+                            (tool.description && lowerMessage.includes(tool.description.toLowerCase().split(' ')[0]))) {
+                            const result = await callKlairTool(tool.name, { query: message, context: slideText });
+                            if (result && result.result) {
+                                responseText = `[Klair Data] ${JSON.stringify(result.result, null, 2)}`;
+                                break;
+                            }
+                        }
+                    }
+
+                    // If no specific tool matched, try generic query
+                    if (!responseText) {
+                        const queryResult = await fetch(`${KLAIR_PROXY_URL}/api/query`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ query: message, context: { slide: slideText, deck: allDeckText } })
+                        });
+                        if (queryResult.ok) {
+                            const data = await queryResult.json();
+                            if (data.response) {
+                                responseText = data.response;
+                            }
+                        }
+                    }
+                }
+
+                // Fall back to Gemini if Klair didn't provide a response
+                if (!responseText) {
+                    const systemPrompt = `You are Klair, an AI assistant connected to a pitch deck viewer. You have access to the current deck data and can help users:
 1. Validate and check numbers in the deck
 2. Answer questions about the financials and projections
 3. Compare data points across slides
@@ -2147,21 +2242,19 @@ ${slideText}
 Full deck summary data:
 ${allDeckText}
 
+${klairConnected ? 'You are connected to Klair MCP for real-time data. Available tools: ' + klairTools.map(t => t.name).join(', ') : 'Running in offline mode - using deck data only.'}
+
 Respond concisely and helpfully. If asked about specific numbers, reference where they appear in the deck.`;
 
-            const userPrompt = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
+                    const userPrompt = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
+                    const { text } = await callGemini(systemPrompt, userPrompt, false);
+                    responseText = text;
+                }
 
-            // Show typing indicator
-            const typingMsg = document.createElement('div');
-            typingMsg.className = 'chat-message assistant';
-            typingMsg.innerHTML = '<span class="loader" style="width:20px;height:20px;border-width:2px;"></span>';
-            chatbotMessages.appendChild(typingMsg);
-
-            try {
-                const { text } = await callGemini(systemPrompt, userPrompt, false);
                 typingMsg.remove();
-                addChatMessage(text, 'assistant');
-                chatHistory.push({ role: 'assistant', content: text });
+                addChatMessage(responseText, 'assistant');
+                chatHistory.push({ role: 'assistant', content: responseText });
+
             } catch (error) {
                 typingMsg.remove();
                 addChatMessage('Sorry, I encountered an error. Please try again.', 'assistant');
@@ -2736,6 +2829,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown or explanation.`;
         // --- INITIAL RENDER ---
         generateThumbnails();
         renderSlide(currentSlideIndex);
+
+        // Check for Klair MCP proxy on load
+        setTimeout(checkKlairConnection, 1000);
 
     </script>
 
