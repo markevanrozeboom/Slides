@@ -34,6 +34,270 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        #slide-container.transitioning {
+            opacity: 0;
+        }
+
+        /* Progress bar */
+        #progress-bar-container {
+            width: 100%;
+            max-width: 1280px;
+            margin: 8px auto 0;
+            height: 4px;
+            background-color: #333;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        #progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3399FF, #8B5CF6);
+            transition: width 0.3s ease;
+            border-radius: 2px;
+        }
+
+        /* Thumbnail panel */
+        #thumbnail-panel {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 200px;
+            height: 100vh;
+            background-color: #111;
+            border-right: 1px solid #333;
+            overflow-y: auto;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            z-index: 100;
+            padding: 10px;
+        }
+
+        #thumbnail-panel.open {
+            transform: translateX(0);
+        }
+
+        #thumbnail-panel h3 {
+            font-size: 14px;
+            font-weight: bold;
+            color: #888;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .thumbnail {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background-color: #222;
+            border: 2px solid #333;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .thumbnail:hover {
+            border-color: #3399FF;
+            transform: scale(1.02);
+        }
+
+        .thumbnail.active {
+            border-color: #3399FF;
+            box-shadow: 0 0 10px rgba(51, 153, 255, 0.5);
+        }
+
+        .thumbnail-number {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background-color: rgba(0,0,0,0.7);
+            color: #fff;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        #thumbnail-toggle {
+            position: fixed;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 99;
+            background-color: #222;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #thumbnail-toggle:hover {
+            background-color: #3399FF;
+            border-color: #3399FF;
+        }
+
+        #thumbnail-toggle.panel-open {
+            left: 210px;
+        }
+
+        /* Timer */
+        #timer-display {
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            color: #3399FF;
+            background-color: #1a1a1a;
+            padding: 8px 16px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #timer-display button {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 4px;
+            transition: color 0.2s;
+        }
+
+        #timer-display button:hover {
+            color: #fff;
+        }
+
+        /* Help overlay */
+        #help-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        #help-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        #help-content {
+            background-color: #1a1a1a;
+            padding: 30px 40px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        #help-content h2 {
+            color: #3399FF;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .shortcut-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .shortcut-row:last-child {
+            border-bottom: none;
+        }
+
+        .shortcut-key {
+            background-color: #333;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        /* Fullscreen mode */
+        body.fullscreen-mode {
+            padding: 0 !important;
+            background-color: #000;
+        }
+
+        body.fullscreen-mode .max-w-6xl > h1,
+        body.fullscreen-mode #progress-bar-container,
+        body.fullscreen-mode .flex.items-center.justify-between {
+            display: none !important;
+        }
+
+        body.fullscreen-mode #slide-deck-container {
+            max-width: 100vw;
+            max-height: 100vh;
+            width: 100vw;
+            height: 100vh;
+            border-radius: 0;
+        }
+
+        /* Fullscreen controls overlay */
+        #fullscreen-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 30px;
+            display: none;
+            gap: 15px;
+            align-items: center;
+            z-index: 500;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        body.fullscreen-mode #fullscreen-controls {
+            display: flex;
+        }
+
+        body.fullscreen-mode:hover #fullscreen-controls,
+        #fullscreen-controls:hover {
+            opacity: 1;
+        }
+
+        #fullscreen-controls button {
+            background: none;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        #fullscreen-controls button:hover {
+            background-color: #3399FF;
+            border-color: #3399FF;
+        }
+
+        #fullscreen-controls .slide-info {
+            color: #888;
+            font-size: 14px;
         }
 
         /* Base class for all slide objects */
@@ -163,6 +427,24 @@
 </head>
 <body class="bg-gray-900 text-white p-4 md:p-8">
 
+    <!-- Thumbnail Panel Toggle Button -->
+    <button id="thumbnail-toggle" title="Toggle slide thumbnails (T)">
+        <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+            <rect x="2" y="2" width="6" height="6" rx="1"/>
+            <rect x="10" y="2" width="6" height="6" rx="1"/>
+            <rect x="2" y="10" width="6" height="6" rx="1"/>
+            <rect x="10" y="10" width="6" height="6" rx="1"/>
+        </svg>
+    </button>
+
+    <!-- Thumbnail Panel -->
+    <div id="thumbnail-panel">
+        <h3>Slides</h3>
+        <div id="thumbnail-list">
+            <!-- Thumbnails generated by JavaScript -->
+        </div>
+    </div>
+
     <div class="max-w-6xl mx-auto">
         <h1 class="text-3xl font-bold text-center mb-6">Investor Overview - Q4 2025</h1>
 
@@ -173,23 +455,87 @@
             </div>
         </div>
 
+        <!-- Progress Bar -->
+        <div id="progress-bar-container">
+            <div id="progress-bar" style="width: 6.25%;"></div>
+        </div>
+
         <!-- Navigation Controls -->
-        <div class="flex items-center justify-between mt-6 max-w-2xl mx-auto">
+        <div class="flex items-center justify-between mt-6 max-w-4xl mx-auto flex-wrap gap-4">
             <button id="prev-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
                 Previous
             </button>
-            
+
+            <!-- Timer -->
+            <div id="timer-display">
+                <span id="timer-time">00:00</span>
+                <button id="timer-toggle" title="Start/Pause timer">▶</button>
+                <button id="timer-reset" title="Reset timer">↺</button>
+            </div>
+
             <button id="speaker-notes-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out">
-                ✨ Generate Speaker Notes
+                ✨ Speaker Notes
             </button>
-            
+
             <div id="slide-counter" class="text-xl font-medium text-gray-300">
                 Slide 1 / 16
             </div>
-            
+
+            <button id="fullscreen-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out" title="Fullscreen (F)">
+                ⛶ Present
+            </button>
+
             <button id="next-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
                 Next
             </button>
+
+            <button id="help-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 ease-in-out" title="Keyboard shortcuts (?)">
+                ?
+            </button>
+        </div>
+    </div>
+
+    <!-- Fullscreen Controls Overlay -->
+    <div id="fullscreen-controls">
+        <button id="fs-prev">← Prev</button>
+        <span class="slide-info"><span id="fs-slide-counter">1 / 16</span></span>
+        <button id="fs-next">Next →</button>
+        <button id="fs-exit">Exit (Esc)</button>
+    </div>
+
+    <!-- Help Overlay -->
+    <div id="help-overlay">
+        <div id="help-content">
+            <h2>Keyboard Shortcuts</h2>
+            <div class="shortcut-row">
+                <span>Next slide</span>
+                <span class="shortcut-key">→</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Previous slide</span>
+                <span class="shortcut-key">←</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Toggle fullscreen</span>
+                <span class="shortcut-key">F</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Toggle thumbnails</span>
+                <span class="shortcut-key">T</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Start/stop timer</span>
+                <span class="shortcut-key">Space</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Show help</span>
+                <span class="shortcut-key">?</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Close modal / Exit fullscreen</span>
+                <span class="shortcut-key">Esc</span>
+            </div>
+            <p class="text-gray-500 text-sm mt-6 text-center">Press any key to close</p>
         </div>
     </div>
 
@@ -456,12 +802,37 @@
         const nextButton = document.getElementById('next-slide');
         const slideCounter = document.getElementById('slide-counter');
         const speakerNotesButton = document.getElementById('speaker-notes-btn');
-        
+
         const modalOverlay = document.getElementById('gemini-modal-overlay');
         const modal = document.getElementById('gemini-modal');
         const modalTitle = document.getElementById('gemini-modal-title');
         const modalContent = document.getElementById('gemini-modal-content');
         const modalCloseButton = document.getElementById('gemini-modal-close');
+
+        // New UI elements
+        const progressBar = document.getElementById('progress-bar');
+        const thumbnailPanel = document.getElementById('thumbnail-panel');
+        const thumbnailToggle = document.getElementById('thumbnail-toggle');
+        const thumbnailList = document.getElementById('thumbnail-list');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const helpBtn = document.getElementById('help-btn');
+        const helpOverlay = document.getElementById('help-overlay');
+        const timerDisplay = document.getElementById('timer-time');
+        const timerToggleBtn = document.getElementById('timer-toggle');
+        const timerResetBtn = document.getElementById('timer-reset');
+        const fsSlideCounter = document.getElementById('fs-slide-counter');
+        const fsPrevBtn = document.getElementById('fs-prev');
+        const fsNextBtn = document.getElementById('fs-next');
+        const fsExitBtn = document.getElementById('fs-exit');
+
+        // Timer state
+        let timerSeconds = 0;
+        let timerInterval = null;
+        let timerRunning = false;
+
+        // Touch/swipe state
+        let touchStartX = 0;
+        let touchEndX = 0;
 
         // --- GEMINI API FUNCTIONS ---
 
@@ -814,16 +1185,25 @@
                 slideContainer.appendChild(el);
             });
 
-            // --- SPECIAL GEMINI FEATURE ---
-            // Add "Analyze" button only to slide 13
-            if (slide.slideNumber === 13) {
-                const analyzeButton = document.createElement('button');
-                analyzeButton.className = 'on-slide-button';
-                analyzeButton.textContent = '✨ Analyze Competitors';
-                analyzeButton.style.left = toPercent(900, 'width'); // Position it on the slide
-                analyzeButton.style.top = toPercent(85, 'height');
-                analyzeButton.addEventListener('click', handleAnalyzeCompetitors);
-                slideContainer.appendChild(analyzeButton);
+            // --- SPECIAL GEMINI FEATURES ---
+            // Add AI-powered buttons to specific slides
+            const slideButtons = {
+                4: { text: '✨ Explore Texas Market', handler: handleExploreTexasMarket, x: 1000, y: 50 },
+                9: { text: '✨ Research Leader', handler: handleResearchLeader, x: 50, y: 630 },
+                12: { text: '✨ Analyze Projections', handler: handleAnalyzeProjections, x: 900, y: 85 },
+                13: { text: '✨ Analyze Competitors', handler: handleAnalyzeCompetitors, x: 900, y: 85 },
+                15: { text: '✨ Valuation Analysis', handler: handleValuationAnalysis, x: 900, y: 85 }
+            };
+
+            if (slideButtons[slide.slideNumber]) {
+                const config = slideButtons[slide.slideNumber];
+                const aiButton = document.createElement('button');
+                aiButton.className = 'on-slide-button';
+                aiButton.textContent = config.text;
+                aiButton.style.left = toPercent(config.x, 'width');
+                aiButton.style.top = toPercent(config.y, 'height');
+                aiButton.addEventListener('click', config.handler);
+                slideContainer.appendChild(aiButton);
             }
 
             updateControls();
@@ -834,8 +1214,213 @@
          */
         function updateControls() {
             slideCounter.textContent = `Slide ${currentSlideIndex + 1} / ${totalSlides}`;
+            fsSlideCounter.textContent = `${currentSlideIndex + 1} / ${totalSlides}`;
             prevButton.disabled = (currentSlideIndex === 0);
             nextButton.disabled = (currentSlideIndex === totalSlides - 1);
+
+            // Update progress bar
+            const progress = ((currentSlideIndex + 1) / totalSlides) * 100;
+            progressBar.style.width = `${progress}%`;
+
+            // Update thumbnail active state
+            document.querySelectorAll('.thumbnail').forEach((thumb, index) => {
+                thumb.classList.toggle('active', index === currentSlideIndex);
+            });
+        }
+
+        // --- THUMBNAIL FUNCTIONS ---
+
+        /**
+         * Generates thumbnail elements for all slides.
+         */
+        function generateThumbnails() {
+            thumbnailList.innerHTML = '';
+            slides.forEach((slide, index) => {
+                const thumb = document.createElement('div');
+                thumb.className = 'thumbnail' + (index === currentSlideIndex ? ' active' : '');
+                thumb.dataset.index = index;
+
+                // Create a mini preview with slide title
+                const title = getSlideTitle(slide);
+                thumb.innerHTML = `
+                    <div style="padding: 6px; font-size: 9px; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${title}
+                    </div>
+                    <span class="thumbnail-number">${index + 1}</span>
+                `;
+                thumb.style.backgroundColor = formatColor(slide.backgroundColor || deckData.theme.backgroundColor);
+
+                thumb.addEventListener('click', () => goToSlide(index));
+                thumbnailList.appendChild(thumb);
+            });
+        }
+
+        /**
+         * Gets the title from a slide for thumbnail display.
+         */
+        function getSlideTitle(slide) {
+            const textObj = slide.objects.find(obj => obj.type === 'text' && obj.fontSize >= 24);
+            if (textObj) {
+                return textObj.text.split('\n')[0].substring(0, 30);
+            }
+            return `Slide ${slide.slideNumber}`;
+        }
+
+        /**
+         * Toggles the thumbnail panel visibility.
+         */
+        function toggleThumbnailPanel() {
+            thumbnailPanel.classList.toggle('open');
+            thumbnailToggle.classList.toggle('panel-open');
+        }
+
+        // --- TIMER FUNCTIONS ---
+
+        /**
+         * Formats seconds into MM:SS format.
+         */
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        /**
+         * Toggles the presentation timer.
+         */
+        function toggleTimer() {
+            if (timerRunning) {
+                clearInterval(timerInterval);
+                timerToggleBtn.textContent = '▶';
+                timerRunning = false;
+            } else {
+                timerInterval = setInterval(() => {
+                    timerSeconds++;
+                    timerDisplay.textContent = formatTime(timerSeconds);
+                }, 1000);
+                timerToggleBtn.textContent = '⏸';
+                timerRunning = true;
+            }
+        }
+
+        /**
+         * Resets the presentation timer.
+         */
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timerSeconds = 0;
+            timerDisplay.textContent = '00:00';
+            timerToggleBtn.textContent = '▶';
+            timerRunning = false;
+        }
+
+        // --- FULLSCREEN FUNCTIONS ---
+
+        /**
+         * Toggles fullscreen presentation mode.
+         */
+        function toggleFullscreen() {
+            document.body.classList.toggle('fullscreen-mode');
+            if (document.body.classList.contains('fullscreen-mode')) {
+                fullscreenBtn.textContent = '⛶ Exit';
+                // Auto-start timer when entering presentation mode
+                if (!timerRunning) {
+                    toggleTimer();
+                }
+            } else {
+                fullscreenBtn.textContent = '⛶ Present';
+            }
+        }
+
+        /**
+         * Exits fullscreen mode.
+         */
+        function exitFullscreen() {
+            document.body.classList.remove('fullscreen-mode');
+            fullscreenBtn.textContent = '⛶ Present';
+        }
+
+        // --- HELP FUNCTIONS ---
+
+        /**
+         * Shows the help overlay.
+         */
+        function showHelp() {
+            helpOverlay.classList.add('visible');
+        }
+
+        /**
+         * Hides the help overlay.
+         */
+        function hideHelp() {
+            helpOverlay.classList.remove('visible');
+        }
+
+        // --- NAVIGATION FUNCTIONS ---
+
+        /**
+         * Goes to a specific slide with transition.
+         */
+        function goToSlide(index) {
+            if (index < 0 || index >= totalSlides || index === currentSlideIndex) return;
+
+            slideContainer.classList.add('transitioning');
+            setTimeout(() => {
+                currentSlideIndex = index;
+                renderSlide(currentSlideIndex);
+                slideContainer.classList.remove('transitioning');
+            }, 150);
+        }
+
+        /**
+         * Navigates to next slide.
+         */
+        function nextSlide() {
+            if (currentSlideIndex < totalSlides - 1) {
+                goToSlide(currentSlideIndex + 1);
+            }
+        }
+
+        /**
+         * Navigates to previous slide.
+         */
+        function prevSlide() {
+            if (currentSlideIndex > 0) {
+                goToSlide(currentSlideIndex - 1);
+            }
+        }
+
+        // --- TOUCH/SWIPE FUNCTIONS ---
+
+        /**
+         * Handles touch start event.
+         */
+        function handleTouchStart(e) {
+            touchStartX = e.changedTouches[0].screenX;
+        }
+
+        /**
+         * Handles touch end event and determines swipe direction.
+         */
+        function handleTouchEnd(e) {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }
+
+        /**
+         * Processes swipe gesture.
+         */
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const diff = touchStartX - touchEndX;
+
+            if (Math.abs(diff) > swipeThreshold) {
+                if (diff > 0) {
+                    nextSlide(); // Swipe left = next
+                } else {
+                    prevSlide(); // Swipe right = previous
+                }
+            }
         }
 
         // --- EVENT HANDLERS ---
@@ -873,24 +1458,88 @@
             showModal("✨ Market Analysis", htmlContent);
         }
 
+        /**
+         * Handles the click for "Analyze Projections" (Slide 12 - Financial).
+         */
+        async function handleAnalyzeProjections() {
+            const slide = slides[11]; // Slide 12 is index 11
+            const slideText = extractTextFromSlide(slide);
+
+            const systemPrompt = "You are a financial analyst specializing in EdTech and education startups. Analyze the financial projections provided. Comment on: 1) The growth trajectory and whether it's realistic, 2) The EBITDA margins, 3) Key risks and assumptions, 4) How it compares to typical EdTech growth. Be concise but insightful.";
+            const userPrompt = `Analyze these financial projections for a sports academy:\n\n${slideText}`;
+
+            showModal("Analyzing Projections...", "", true);
+
+            const { text } = await callGemini(systemPrompt, userPrompt, false);
+            const htmlContent = formatTextToHtml(text);
+
+            showModal("✨ Financial Analysis", `<div>${htmlContent}</div>`);
+        }
+
+        /**
+         * Handles the click for "Research Leader" (Slide 9 - Team).
+         */
+        async function handleResearchLeader() {
+            const systemPrompt = "You are a business researcher. Find and summarize information about Joe Liemandt, focusing on his business background, notable achievements, and his involvement in education. Provide 4-5 key facts in bullet point format.";
+            const userPrompt = "Research Joe Liemandt, billionaire entrepreneur and founder. What is his background with Trilogy Software and his recent education ventures?";
+
+            showModal("Researching...", "", true);
+
+            const { text, sources } = await callGemini(systemPrompt, userPrompt, true);
+            const htmlContent = `<ul>${formatTextToHtml(text)}</ul>` + formatSources(sources);
+
+            showModal("✨ Leadership Research", htmlContent);
+        }
+
+        /**
+         * Handles the click for "Explore Texas Market" (Slide 4).
+         */
+        async function handleExploreTexasMarket() {
+            const systemPrompt = "You are a market research analyst. Provide insights on why Texas is an attractive market for education startups and private schools. Focus on: demographics, school choice policies, economic factors, and competition. Format as concise bullet points.";
+            const userPrompt = "Research the Texas education market: Why is Texas a good state for private schools and education startups? What are the key demographic and policy factors?";
+
+            showModal("Researching Texas Market...", "", true);
+
+            const { text, sources } = await callGemini(systemPrompt, userPrompt, true);
+            const htmlContent = `<ul>${formatTextToHtml(text)}</ul>` + formatSources(sources);
+
+            showModal("✨ Texas Market Insights", htmlContent);
+        }
+
+        /**
+         * Handles the click for "Valuation Analysis" (Slide 15 - Required Capital).
+         */
+        async function handleValuationAnalysis() {
+            const slide = slides[14]; // Slide 15 is index 14
+            const slideText = extractTextFromSlide(slide);
+
+            const systemPrompt = "You are an investment analyst. Analyze the funding ask and valuation. Comment on: 1) Whether a $1B pre-money valuation is reasonable, 2) How the use of funds breakdown looks, 3) Comparable deals in EdTech. Be direct and analytical.";
+            const userPrompt = `Analyze this funding ask and valuation:\n\n${slideText}`;
+
+            showModal("Analyzing Valuation...", "", true);
+
+            const { text } = await callGemini(systemPrompt, userPrompt, false);
+            const htmlContent = formatTextToHtml(text);
+
+            showModal("✨ Valuation Analysis", `<div>${htmlContent}</div>`);
+        }
+
 
         // --- EVENT LISTENERS ---
-        prevButton.addEventListener('click', () => {
-            if (currentSlideIndex > 0) {
-                currentSlideIndex--;
-                renderSlide(currentSlideIndex);
-            }
-        });
 
-        nextButton.addEventListener('click', () => {
-            if (currentSlideIndex < totalSlides - 1) {
-                currentSlideIndex++;
-                renderSlide(currentSlideIndex);
-            }
-        });
-        
+        // Navigation buttons
+        prevButton.addEventListener('click', prevSlide);
+        nextButton.addEventListener('click', nextSlide);
+
+        // Fullscreen navigation
+        fsPrevBtn.addEventListener('click', prevSlide);
+        fsNextBtn.addEventListener('click', nextSlide);
+        fsExitBtn.addEventListener('click', exitFullscreen);
+
+        // Speaker notes
         speakerNotesButton.addEventListener('click', handleGenerateSpeakerNotes);
-        
+
+        // Modal controls
         modalCloseButton.addEventListener('click', hideModal);
         modalOverlay.addEventListener('click', (e) => {
             if (e.target === modalOverlay) {
@@ -898,17 +1547,94 @@
             }
         });
 
+        // Thumbnail panel
+        thumbnailToggle.addEventListener('click', toggleThumbnailPanel);
+
+        // Timer controls
+        timerToggleBtn.addEventListener('click', toggleTimer);
+        timerResetBtn.addEventListener('click', resetTimer);
+
+        // Fullscreen button
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+        // Help button and overlay
+        helpBtn.addEventListener('click', showHelp);
+        helpOverlay.addEventListener('click', hideHelp);
+        helpOverlay.addEventListener('keydown', hideHelp);
+
+        // Touch/swipe support
+        slideContainer.addEventListener('touchstart', handleTouchStart, { passive: true });
+        slideContainer.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight') {
-                nextButton.click();
-            } else if (e.key === 'ArrowLeft') {
-                prevButton.click();
-            } else if (e.key === 'Escape') {
-                hideModal();
+            // Don't handle keys when modal is open (except Escape)
+            const modalVisible = modalOverlay.classList.contains('visible');
+            const helpVisible = helpOverlay.classList.contains('visible');
+
+            if (helpVisible) {
+                hideHelp();
+                return;
+            }
+
+            if (e.key === 'Escape') {
+                if (modalVisible) {
+                    hideModal();
+                } else if (document.body.classList.contains('fullscreen-mode')) {
+                    exitFullscreen();
+                }
+                return;
+            }
+
+            if (modalVisible) return;
+
+            switch (e.key) {
+                case 'ArrowRight':
+                case 'PageDown':
+                    nextSlide();
+                    break;
+                case 'ArrowLeft':
+                case 'PageUp':
+                    prevSlide();
+                    break;
+                case 'f':
+                case 'F':
+                    toggleFullscreen();
+                    break;
+                case 't':
+                case 'T':
+                    toggleThumbnailPanel();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    toggleTimer();
+                    break;
+                case '?':
+                    showHelp();
+                    break;
+                case 'Home':
+                    goToSlide(0);
+                    break;
+                case 'End':
+                    goToSlide(totalSlides - 1);
+                    break;
+            }
+        });
+
+        // Number keys to jump to slides (1-9)
+        document.addEventListener('keydown', (e) => {
+            const modalVisible = modalOverlay.classList.contains('visible');
+            const helpVisible = helpOverlay.classList.contains('visible');
+            if (modalVisible || helpVisible) return;
+
+            const num = parseInt(e.key);
+            if (!isNaN(num) && num >= 1 && num <= 9) {
+                goToSlide(num - 1);
             }
         });
 
         // --- INITIAL RENDER ---
+        generateThumbnails();
         renderSlide(currentSlideIndex);
 
     </script>
