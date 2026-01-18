@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pitch Deck Viewer</title>
+    <title>Pitch Deck Studio</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF.js for PDF parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Mammoth.js for Word docs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <style>
         /* Base styles */
         body {
@@ -300,6 +304,399 @@
             font-size: 14px;
         }
 
+        /* Chatbot Sidebar */
+        #chatbot-sidebar {
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 380px;
+            height: 100vh;
+            background-color: #0a0a0a;
+            border-left: 1px solid #333;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 150;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #chatbot-sidebar.open {
+            transform: translateX(0);
+        }
+
+        #chatbot-header {
+            padding: 16px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #chatbot-header h3 {
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #chatbot-header .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #22c55e;
+        }
+
+        #chatbot-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .chat-message {
+            max-width: 90%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .chat-message.user {
+            align-self: flex-end;
+            background-color: #3399FF;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-message.assistant {
+            align-self: flex-start;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-message.system {
+            align-self: center;
+            background-color: transparent;
+            color: #666;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        #chatbot-input-area {
+            padding: 16px;
+            border-top: 1px solid #333;
+        }
+
+        #chatbot-input-area form {
+            display: flex;
+            gap: 8px;
+        }
+
+        #chatbot-input {
+            flex: 1;
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        #chatbot-input:focus {
+            outline: none;
+            border-color: #3399FF;
+        }
+
+        #chatbot-send {
+            background-color: #3399FF;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        #chatbot-send:hover {
+            background-color: #257fdb;
+        }
+
+        #chatbot-toggle {
+            position: fixed;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 149;
+            background-color: #3399FF;
+            border: none;
+            color: #fff;
+            padding: 12px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(51, 153, 255, 0.3);
+        }
+
+        #chatbot-toggle:hover {
+            background-color: #257fdb;
+            transform: translateY(-50%) scale(1.05);
+        }
+
+        #chatbot-toggle.sidebar-open {
+            right: 390px;
+        }
+
+        /* Upload Modal */
+        #upload-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        #upload-modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        #upload-modal {
+            background-color: #111;
+            border: 1px solid #333;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 30px;
+        }
+
+        .upload-section {
+            margin-bottom: 24px;
+        }
+
+        .upload-section h3 {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+
+        .upload-section p {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 16px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #444;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: #0a0a0a;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #3399FF;
+            background-color: rgba(51, 153, 255, 0.05);
+        }
+
+        .drop-zone-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .drop-zone-text {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .drop-zone-text strong {
+            color: #3399FF;
+        }
+
+        .uploaded-files {
+            margin-top: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .uploaded-file {
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .uploaded-file .remove-file {
+            color: #888;
+            cursor: pointer;
+        }
+
+        .uploaded-file .remove-file:hover {
+            color: #ef4444;
+        }
+
+        .branding-preview {
+            display: flex;
+            gap: 16px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .color-swatch {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            border: 2px solid #333;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.1);
+        }
+
+        .color-swatch.selected {
+            border-color: #3399FF;
+            box-shadow: 0 0 10px rgba(51, 153, 255, 0.5);
+        }
+
+        .logo-preview {
+            width: 100px;
+            height: 60px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+
+        /* Editor Mode */
+        body.editor-mode #slide-container .slide-object {
+            cursor: pointer;
+            transition: outline 0.2s ease;
+        }
+
+        body.editor-mode #slide-container .slide-object:hover {
+            outline: 2px solid rgba(51, 153, 255, 0.5);
+        }
+
+        body.editor-mode #slide-container .slide-object.editing {
+            outline: 2px solid #3399FF;
+        }
+
+        #editor-toolbar {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #111;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 8px 16px;
+            display: none;
+            gap: 12px;
+            align-items: center;
+            z-index: 200;
+        }
+
+        body.editor-mode #editor-toolbar {
+            display: flex;
+        }
+
+        #editor-toolbar button {
+            background: none;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        #editor-toolbar button:hover {
+            background-color: #333;
+        }
+
+        #editor-toolbar button.active {
+            background-color: #3399FF;
+            border-color: #3399FF;
+        }
+
+        /* Generation Progress */
+        #generation-progress {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #111;
+            border: 1px solid #333;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            z-index: 3000;
+            display: none;
+        }
+
+        #generation-progress.visible {
+            display: block;
+        }
+
+        #generation-progress h3 {
+            font-size: 20px;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+
+        #generation-progress .progress-bar {
+            width: 300px;
+            height: 8px;
+            background-color: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        #generation-progress .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3399FF, #8B5CF6);
+            transition: width 0.3s ease;
+        }
+
+        #generation-progress .progress-status {
+            color: #888;
+            font-size: 14px;
+        }
+
         /* Base class for all slide objects */
         .slide-object {
             position: absolute;
@@ -445,8 +842,118 @@
         </div>
     </div>
 
+    <!-- Chatbot Toggle Button -->
+    <button id="chatbot-toggle" title="Open AI Assistant (C)">
+        <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+            <circle cx="8" cy="10" r="1.5"/>
+            <circle cx="12" cy="10" r="1.5"/>
+            <circle cx="16" cy="10" r="1.5"/>
+        </svg>
+    </button>
+
+    <!-- Chatbot Sidebar -->
+    <div id="chatbot-sidebar">
+        <div id="chatbot-header">
+            <h3><span class="status-dot"></span> Klair AI Assistant</h3>
+            <button id="chatbot-close" style="background:none;border:none;color:#888;font-size:24px;cursor:pointer;">&times;</button>
+        </div>
+        <div id="chatbot-messages">
+            <div class="chat-message system">Connected to Klair MCP</div>
+            <div class="chat-message assistant">Hi! I can help you analyze the deck data, validate numbers, and answer questions about the financials. What would you like to know?</div>
+        </div>
+        <div id="chatbot-input-area">
+            <form id="chatbot-form">
+                <input type="text" id="chatbot-input" placeholder="Ask about the data..." autocomplete="off">
+                <button type="submit" id="chatbot-send">Send</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Editor Toolbar -->
+    <div id="editor-toolbar">
+        <span style="color: #888; font-size: 12px;">EDIT MODE</span>
+        <button id="editor-add-text" title="Add Text">+ Text</button>
+        <button id="editor-add-shape" title="Add Shape">+ Shape</button>
+        <button id="editor-ai-suggest" title="AI Suggestions">✨ AI Suggest</button>
+        <button id="editor-exit" title="Exit Editor">Exit</button>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal-overlay">
+        <div id="upload-modal">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="font-size: 24px; font-weight: bold; color: #fff;">Create New Deck</h2>
+                <button id="upload-modal-close" style="background:none;border:none;color:#888;font-size:28px;cursor:pointer;">&times;</button>
+            </div>
+
+            <div class="upload-section">
+                <h3>1. Upload Content</h3>
+                <p>Upload documents with your content - PDFs, Word docs, text files, or existing presentations</p>
+                <div class="drop-zone" id="content-drop-zone">
+                    <div class="drop-zone-icon">📄</div>
+                    <div class="drop-zone-text">
+                        Drag & drop files here or <strong>click to browse</strong><br>
+                        <small>PDF, DOCX, TXT, PPTX supported</small>
+                    </div>
+                    <input type="file" id="content-file-input" multiple accept=".pdf,.docx,.doc,.txt,.pptx,.ppt" style="display:none;">
+                </div>
+                <div class="uploaded-files" id="content-files-list"></div>
+            </div>
+
+            <div class="upload-section">
+                <h3>2. Upload Branding</h3>
+                <p>Upload logos, style guides, or images to extract your brand colors and assets</p>
+                <div class="drop-zone" id="branding-drop-zone">
+                    <div class="drop-zone-icon">🎨</div>
+                    <div class="drop-zone-text">
+                        Drag & drop branding assets or <strong>click to browse</strong><br>
+                        <small>PNG, JPG, SVG, PDF supported</small>
+                    </div>
+                    <input type="file" id="branding-file-input" multiple accept=".png,.jpg,.jpeg,.svg,.pdf" style="display:none;">
+                </div>
+                <div class="uploaded-files" id="branding-files-list"></div>
+                <div class="branding-preview" id="branding-preview"></div>
+            </div>
+
+            <div class="upload-section">
+                <h3>3. Deck Settings</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="display: block; color: #888; font-size: 14px; margin-bottom: 8px;">Deck Title</label>
+                        <input type="text" id="deck-title-input" placeholder="e.g., Q4 Investor Update" style="width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 10px; color: #fff;">
+                    </div>
+                    <div>
+                        <label style="display: block; color: #888; font-size: 14px; margin-bottom: 8px;">Deck Type</label>
+                        <select id="deck-type-select" style="width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 10px; color: #fff;">
+                            <option value="pitch">Pitch Deck</option>
+                            <option value="sales">Sales Deck</option>
+                            <option value="report">Report/Update</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+                <button id="upload-cancel" style="background: #333; border: none; color: #fff; padding: 12px 24px; border-radius: 8px; cursor: pointer;">Cancel</button>
+                <button id="upload-generate" style="background: linear-gradient(90deg, #3399FF, #8B5CF6); border: none; color: #fff; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold;">✨ Generate Deck</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generation Progress -->
+    <div id="generation-progress">
+        <div class="loader" style="margin-bottom: 20px;"></div>
+        <h3>Generating Your Deck</h3>
+        <div class="progress-bar">
+            <div class="progress-fill" id="generation-progress-fill" style="width: 0%;"></div>
+        </div>
+        <div class="progress-status" id="generation-status">Analyzing content...</div>
+    </div>
+
     <div class="max-w-6xl mx-auto">
-        <h1 class="text-3xl font-bold text-center mb-6">Investor Overview - Q4 2025</h1>
+        <h1 class="text-3xl font-bold text-center mb-6" id="deck-title">Investor Overview - Q4 2025</h1>
 
         <!-- Slide Deck Container -->
         <div id="slide-deck-container" class="bg-black">
@@ -461,9 +968,21 @@
         </div>
 
         <!-- Navigation Controls -->
-        <div class="flex items-center justify-between mt-6 max-w-4xl mx-auto flex-wrap gap-4">
-            <button id="prev-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
-                Previous
+        <div class="flex items-center justify-between mt-6 max-w-5xl mx-auto flex-wrap gap-3">
+            <button id="new-deck-btn" class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out" title="Create new deck (N)">
+                + New Deck
+            </button>
+
+            <button id="prev-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                ← Prev
+            </button>
+
+            <div id="slide-counter" class="text-lg font-medium text-gray-300">
+                1 / 16
+            </div>
+
+            <button id="next-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                Next →
             </button>
 
             <!-- Timer -->
@@ -473,23 +992,19 @@
                 <button id="timer-reset" title="Reset timer">↺</button>
             </div>
 
-            <button id="speaker-notes-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out">
-                ✨ Speaker Notes
+            <button id="edit-mode-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out" title="Edit slides (E)">
+                ✏️ Edit
             </button>
 
-            <div id="slide-counter" class="text-xl font-medium text-gray-300">
-                Slide 1 / 16
-            </div>
+            <button id="speaker-notes-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out">
+                ✨ Notes
+            </button>
 
-            <button id="fullscreen-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out" title="Fullscreen (F)">
+            <button id="fullscreen-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out" title="Fullscreen (F)">
                 ⛶ Present
             </button>
 
-            <button id="next-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
-                Next
-            </button>
-
-            <button id="help-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 ease-in-out" title="Keyboard shortcuts (?)">
+            <button id="help-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg transition duration-200 ease-in-out" title="Keyboard shortcuts (?)">
                 ?
             </button>
         </div>
@@ -530,6 +1045,18 @@
             <div class="shortcut-row">
                 <span>Show help</span>
                 <span class="shortcut-key">?</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Open AI Chat</span>
+                <span class="shortcut-key">C</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Create new deck</span>
+                <span class="shortcut-key">N</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Toggle editor mode</span>
+                <span class="shortcut-key">E</span>
             </div>
             <div class="shortcut-row">
                 <span>Close modal / Exit fullscreen</span>
@@ -833,6 +1360,48 @@
         // Touch/swipe state
         let touchStartX = 0;
         let touchEndX = 0;
+
+        // New UI elements
+        const chatbotSidebar = document.getElementById('chatbot-sidebar');
+        const chatbotToggle = document.getElementById('chatbot-toggle');
+        const chatbotClose = document.getElementById('chatbot-close');
+        const chatbotMessages = document.getElementById('chatbot-messages');
+        const chatbotForm = document.getElementById('chatbot-form');
+        const chatbotInput = document.getElementById('chatbot-input');
+        const uploadModalOverlay = document.getElementById('upload-modal-overlay');
+        const uploadModalClose = document.getElementById('upload-modal-close');
+        const uploadCancel = document.getElementById('upload-cancel');
+        const uploadGenerate = document.getElementById('upload-generate');
+        const newDeckBtn = document.getElementById('new-deck-btn');
+        const editModeBtn = document.getElementById('edit-mode-btn');
+        const editorExit = document.getElementById('editor-exit');
+        const editorAiSuggest = document.getElementById('editor-ai-suggest');
+        const contentDropZone = document.getElementById('content-drop-zone');
+        const contentFileInput = document.getElementById('content-file-input');
+        const contentFilesList = document.getElementById('content-files-list');
+        const brandingDropZone = document.getElementById('branding-drop-zone');
+        const brandingFileInput = document.getElementById('branding-file-input');
+        const brandingFilesList = document.getElementById('branding-files-list');
+        const brandingPreview = document.getElementById('branding-preview');
+        const generationProgress = document.getElementById('generation-progress');
+        const generationProgressFill = document.getElementById('generation-progress-fill');
+        const generationStatus = document.getElementById('generation-status');
+        const deckTitleElement = document.getElementById('deck-title');
+        const deckTitleInput = document.getElementById('deck-title-input');
+        const deckTypeSelect = document.getElementById('deck-type-select');
+
+        // Upload state
+        let uploadedContentFiles = [];
+        let uploadedBrandingFiles = [];
+        let extractedContent = '';
+        let extractedBranding = { colors: [], logos: [] };
+
+        // Editor state
+        let editorMode = false;
+        let selectedElement = null;
+
+        // Chat history for context
+        let chatHistory = [];
 
         // --- GEMINI API FUNCTIONS ---
 
@@ -1525,6 +2094,495 @@
         }
 
 
+        // --- CHATBOT FUNCTIONS ---
+
+        /**
+         * Toggles the chatbot sidebar.
+         */
+        function toggleChatbot() {
+            chatbotSidebar.classList.toggle('open');
+            chatbotToggle.classList.toggle('sidebar-open');
+        }
+
+        /**
+         * Adds a message to the chatbot.
+         */
+        function addChatMessage(content, role = 'assistant') {
+            const msg = document.createElement('div');
+            msg.className = `chat-message ${role}`;
+            msg.textContent = content;
+            chatbotMessages.appendChild(msg);
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+        }
+
+        /**
+         * Handles chatbot form submission.
+         * Integrates with Klair MCP for data queries.
+         */
+        async function handleChatSubmit(e) {
+            e.preventDefault();
+            const message = chatbotInput.value.trim();
+            if (!message) return;
+
+            addChatMessage(message, 'user');
+            chatbotInput.value = '';
+
+            // Build context from current deck data
+            const currentSlide = slides[currentSlideIndex];
+            const slideText = extractTextFromSlide(currentSlide);
+            const allDeckText = slides.map(s => extractTextFromSlide(s)).join('\n\n');
+
+            // Add to chat history
+            chatHistory.push({ role: 'user', content: message });
+
+            const systemPrompt = `You are Klair, an AI assistant connected to a pitch deck viewer. You have access to the current deck data and can help users:
+1. Validate and check numbers in the deck
+2. Answer questions about the financials and projections
+3. Compare data points across slides
+4. Suggest improvements to the content
+
+Current slide content:
+${slideText}
+
+Full deck summary data:
+${allDeckText}
+
+Respond concisely and helpfully. If asked about specific numbers, reference where they appear in the deck.`;
+
+            const userPrompt = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
+
+            // Show typing indicator
+            const typingMsg = document.createElement('div');
+            typingMsg.className = 'chat-message assistant';
+            typingMsg.innerHTML = '<span class="loader" style="width:20px;height:20px;border-width:2px;"></span>';
+            chatbotMessages.appendChild(typingMsg);
+
+            try {
+                const { text } = await callGemini(systemPrompt, userPrompt, false);
+                typingMsg.remove();
+                addChatMessage(text, 'assistant');
+                chatHistory.push({ role: 'assistant', content: text });
+            } catch (error) {
+                typingMsg.remove();
+                addChatMessage('Sorry, I encountered an error. Please try again.', 'assistant');
+            }
+        }
+
+        // --- UPLOAD & FILE PROCESSING FUNCTIONS ---
+
+        /**
+         * Shows the upload modal.
+         */
+        function showUploadModal() {
+            uploadModalOverlay.classList.add('visible');
+            // Reset state
+            uploadedContentFiles = [];
+            uploadedBrandingFiles = [];
+            extractedContent = '';
+            extractedBranding = { colors: [], logos: [] };
+            contentFilesList.innerHTML = '';
+            brandingFilesList.innerHTML = '';
+            brandingPreview.innerHTML = '';
+            deckTitleInput.value = '';
+        }
+
+        /**
+         * Hides the upload modal.
+         */
+        function hideUploadModal() {
+            uploadModalOverlay.classList.remove('visible');
+        }
+
+        /**
+         * Handles file drop on a drop zone.
+         */
+        function handleFileDrop(e, type) {
+            e.preventDefault();
+            e.target.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files);
+            processFiles(files, type);
+        }
+
+        /**
+         * Processes uploaded files.
+         */
+        async function processFiles(files, type) {
+            for (const file of files) {
+                if (type === 'content') {
+                    uploadedContentFiles.push(file);
+                    addFileToList(file, contentFilesList, 'content');
+                    await extractContentFromFile(file);
+                } else {
+                    uploadedBrandingFiles.push(file);
+                    addFileToList(file, brandingFilesList, 'branding');
+                    await extractBrandingFromFile(file);
+                }
+            }
+        }
+
+        /**
+         * Adds a file to the display list.
+         */
+        function addFileToList(file, listElement, type) {
+            const fileEl = document.createElement('div');
+            fileEl.className = 'uploaded-file';
+            fileEl.innerHTML = `
+                <span>${file.name}</span>
+                <span class="remove-file" data-name="${file.name}" data-type="${type}">&times;</span>
+            `;
+            fileEl.querySelector('.remove-file').addEventListener('click', (e) => {
+                const name = e.target.dataset.name;
+                const fileType = e.target.dataset.type;
+                if (fileType === 'content') {
+                    uploadedContentFiles = uploadedContentFiles.filter(f => f.name !== name);
+                } else {
+                    uploadedBrandingFiles = uploadedBrandingFiles.filter(f => f.name !== name);
+                }
+                fileEl.remove();
+            });
+            listElement.appendChild(fileEl);
+        }
+
+        /**
+         * Extracts text content from various file types.
+         */
+        async function extractContentFromFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+
+            if (ext === 'txt') {
+                const text = await file.text();
+                extractedContent += '\n\n' + text;
+            } else if (ext === 'pdf') {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let text = '';
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const content = await page.getTextContent();
+                        text += content.items.map(item => item.str).join(' ') + '\n\n';
+                    }
+                    extractedContent += '\n\n' + text;
+                } catch (e) {
+                    console.error('PDF extraction error:', e);
+                }
+            } else if (ext === 'docx' || ext === 'doc') {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.extractRawText({ arrayBuffer });
+                    extractedContent += '\n\n' + result.value;
+                } catch (e) {
+                    console.error('DOCX extraction error:', e);
+                }
+            }
+        }
+
+        /**
+         * Extracts branding colors from images.
+         */
+        async function extractBrandingFromFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+
+            if (['png', 'jpg', 'jpeg', 'svg'].includes(ext)) {
+                // Create image and extract colors
+                const url = URL.createObjectURL(file);
+
+                // Add logo preview
+                const logoDiv = document.createElement('div');
+                logoDiv.className = 'logo-preview';
+                logoDiv.style.backgroundImage = `url(${url})`;
+                brandingPreview.appendChild(logoDiv);
+                extractedBranding.logos.push(url);
+
+                // Extract dominant colors using canvas
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+
+                    try {
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const colors = extractDominantColors(imageData.data);
+                        colors.forEach(color => {
+                            if (!extractedBranding.colors.includes(color)) {
+                                extractedBranding.colors.push(color);
+                                addColorSwatch(color);
+                            }
+                        });
+                    } catch (e) {
+                        console.error('Color extraction error:', e);
+                    }
+                };
+                img.src = url;
+            }
+        }
+
+        /**
+         * Extracts dominant colors from image data.
+         */
+        function extractDominantColors(data) {
+            const colorCounts = {};
+            for (let i = 0; i < data.length; i += 4) {
+                const r = Math.round(data[i] / 32) * 32;
+                const g = Math.round(data[i + 1] / 32) * 32;
+                const b = Math.round(data[i + 2] / 32) * 32;
+                const a = data[i + 3];
+                if (a < 128) continue; // Skip transparent
+                const color = `${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+                colorCounts[color] = (colorCounts[color] || 0) + 1;
+            }
+
+            return Object.entries(colorCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([color]) => color.toUpperCase());
+        }
+
+        /**
+         * Adds a color swatch to the branding preview.
+         */
+        function addColorSwatch(color) {
+            const swatch = document.createElement('div');
+            swatch.className = 'color-swatch';
+            swatch.style.backgroundColor = `#${color}`;
+            swatch.title = `#${color}`;
+            swatch.addEventListener('click', () => swatch.classList.toggle('selected'));
+            brandingPreview.appendChild(swatch);
+        }
+
+        // --- DECK GENERATION FUNCTIONS ---
+
+        /**
+         * Generates a new deck from uploaded content.
+         */
+        async function generateDeck() {
+            if (!extractedContent.trim()) {
+                alert('Please upload some content first.');
+                return;
+            }
+
+            hideUploadModal();
+            showGenerationProgress();
+
+            const title = deckTitleInput.value || 'New Presentation';
+            const deckType = deckTypeSelect.value;
+            const colors = extractedBranding.colors.length > 0
+                ? extractedBranding.colors
+                : ['3399FF', 'FFFFFF', '000000'];
+
+            updateProgress(10, 'Analyzing content...');
+
+            const systemPrompt = `You are an expert pitch deck designer. Generate a complete pitch deck in JSON format based on the provided content.
+
+The deck should follow this exact structure:
+{
+  "theme": {
+    "themeName": "Custom",
+    "slideWidth": 1280,
+    "slideHeight": 720,
+    "backgroundColor": "${colors[2] || '000000'}",
+    "fontFamily": "Inter",
+    "primaryColor": "${colors[1] || 'FFFFFF'}",
+    "secondaryColor": "${colors[0] || '3399FF'}"
+  },
+  "slides": [
+    {
+      "slideNumber": 1,
+      "backgroundColor": "000000",
+      "objects": [
+        { "type": "text", "text": "Title", "x": 50, "y": 100, "width": 1180, "height": 100, "fontSize": 60, "fontWeight": "bold", "color": "FFFFFF", "horizontalAlign": "center" }
+      ]
+    }
+  ]
+}
+
+Object types available:
+- text: { type, text, x, y, width, height, fontSize, fontWeight, color, horizontalAlign }
+- shape: { type, shapeType: "rectangle", x, y, width, height, backgroundColor, borderRadius }
+- image: { type, url, x, y, width, height, objectFit, opacity, borderRadius }
+
+For a ${deckType} deck, create 8-12 slides with appropriate structure:
+- Cover slide with title
+- Problem/Opportunity slide
+- Solution slide
+- Key metrics/data slides
+- Team/About slide (if relevant)
+- Call to action/closing slide
+
+Use the brand colors: Primary: #${colors[0]}, Secondary: #${colors[1] || 'FFFFFF'}
+
+IMPORTANT: Return ONLY valid JSON, no markdown or explanation.`;
+
+            const userPrompt = `Create a ${deckType} deck titled "${title}" from this content:\n\n${extractedContent.substring(0, 8000)}`;
+
+            updateProgress(30, 'Generating slide structure...');
+
+            try {
+                const { text } = await callGemini(systemPrompt, userPrompt, false);
+                updateProgress(70, 'Building slides...');
+
+                // Parse the JSON response
+                let newDeckData;
+                try {
+                    // Try to extract JSON from the response
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        newDeckData = JSON.parse(jsonMatch[0]);
+                    } else {
+                        throw new Error('No JSON found in response');
+                    }
+                } catch (parseError) {
+                    console.error('JSON parse error:', parseError);
+                    updateProgress(100, 'Error parsing response. Using default structure.');
+                    await sleep(1500);
+                    hideGenerationProgress();
+                    return;
+                }
+
+                updateProgress(90, 'Finalizing deck...');
+
+                // Update the global deckData
+                deckData.theme = newDeckData.theme || deckData.theme;
+                deckData.slides = newDeckData.slides || [];
+
+                // Re-initialize with new data
+                slides.length = 0;
+                deckData.slides.forEach(s => slides.push(s));
+                currentSlideIndex = 0;
+
+                updateProgress(100, 'Done!');
+                await sleep(500);
+                hideGenerationProgress();
+
+                // Update UI
+                deckTitleElement.textContent = title;
+                generateThumbnails();
+                renderSlide(0);
+
+            } catch (error) {
+                console.error('Generation error:', error);
+                updateProgress(100, 'Error generating deck. Please try again.');
+                await sleep(2000);
+                hideGenerationProgress();
+            }
+        }
+
+        /**
+         * Shows the generation progress overlay.
+         */
+        function showGenerationProgress() {
+            generationProgress.classList.add('visible');
+        }
+
+        /**
+         * Hides the generation progress overlay.
+         */
+        function hideGenerationProgress() {
+            generationProgress.classList.remove('visible');
+            generationProgressFill.style.width = '0%';
+        }
+
+        /**
+         * Updates the generation progress.
+         */
+        function updateProgress(percent, status) {
+            generationProgressFill.style.width = `${percent}%`;
+            generationStatus.textContent = status;
+        }
+
+        // --- EDITOR MODE FUNCTIONS ---
+
+        /**
+         * Toggles editor mode.
+         */
+        function toggleEditorMode() {
+            editorMode = !editorMode;
+            document.body.classList.toggle('editor-mode', editorMode);
+            editModeBtn.classList.toggle('bg-yellow-600', !editorMode);
+            editModeBtn.classList.toggle('bg-red-600', editorMode);
+            editModeBtn.textContent = editorMode ? '✏️ Editing' : '✏️ Edit';
+
+            if (editorMode) {
+                makeSlideEditable();
+            } else {
+                renderSlide(currentSlideIndex);
+            }
+        }
+
+        /**
+         * Makes the current slide editable.
+         */
+        function makeSlideEditable() {
+            const slideElements = slideContainer.querySelectorAll('.slide-object');
+            slideElements.forEach((el, index) => {
+                el.addEventListener('click', (e) => handleElementClick(e, index));
+                el.addEventListener('dblclick', (e) => handleElementDoubleClick(e, index));
+            });
+        }
+
+        /**
+         * Handles click on editable element.
+         */
+        function handleElementClick(e, index) {
+            if (!editorMode) return;
+            e.stopPropagation();
+
+            // Deselect previous
+            document.querySelectorAll('.slide-object.editing').forEach(el => el.classList.remove('editing'));
+
+            // Select this element
+            e.target.classList.add('editing');
+            selectedElement = { element: e.target, index };
+        }
+
+        /**
+         * Handles double-click to edit text.
+         */
+        function handleElementDoubleClick(e, index) {
+            if (!editorMode) return;
+            e.stopPropagation();
+
+            const el = e.target;
+            if (!el.classList.contains('slide-text')) return;
+
+            const currentText = el.textContent;
+            el.contentEditable = true;
+            el.focus();
+
+            el.addEventListener('blur', () => {
+                el.contentEditable = false;
+                // Update the data
+                const slide = slides[currentSlideIndex];
+                const textObjects = slide.objects.filter(o => o.type === 'text');
+                if (textObjects[index]) {
+                    textObjects[index].text = el.textContent;
+                }
+            }, { once: true });
+        }
+
+        /**
+         * Handles AI suggestions for current slide.
+         */
+        async function handleAiSuggestions() {
+            const slide = slides[currentSlideIndex];
+            const slideText = extractTextFromSlide(slide);
+
+            const systemPrompt = "You are a pitch deck consultant. Analyze this slide and provide 3 specific, actionable suggestions to improve it. Focus on clarity, impact, and persuasiveness. Format as bullet points.";
+            const userPrompt = `Improve this slide:\n\n${slideText}`;
+
+            showModal("Getting AI Suggestions...", "", true);
+
+            const { text } = await callGemini(systemPrompt, userPrompt, false);
+            const htmlContent = formatTextToHtml(text);
+
+            showModal("✨ Slide Improvement Suggestions", `<div>${htmlContent}</div>`);
+        }
+
         // --- EVENT LISTENERS ---
 
         // Navigation buttons
@@ -1618,6 +2676,18 @@
                 case 'End':
                     goToSlide(totalSlides - 1);
                     break;
+                case 'c':
+                case 'C':
+                    toggleChatbot();
+                    break;
+                case 'n':
+                case 'N':
+                    showUploadModal();
+                    break;
+                case 'e':
+                case 'E':
+                    toggleEditorMode();
+                    break;
             }
         });
 
@@ -1632,6 +2702,36 @@
                 goToSlide(num - 1);
             }
         });
+
+        // Chatbot
+        chatbotToggle.addEventListener('click', toggleChatbot);
+        chatbotClose.addEventListener('click', toggleChatbot);
+        chatbotForm.addEventListener('submit', handleChatSubmit);
+
+        // Upload modal
+        newDeckBtn.addEventListener('click', showUploadModal);
+        uploadModalClose.addEventListener('click', hideUploadModal);
+        uploadCancel.addEventListener('click', hideUploadModal);
+        uploadGenerate.addEventListener('click', generateDeck);
+
+        // Content drop zone
+        contentDropZone.addEventListener('click', () => contentFileInput.click());
+        contentFileInput.addEventListener('change', (e) => processFiles(Array.from(e.target.files), 'content'));
+        contentDropZone.addEventListener('dragover', (e) => { e.preventDefault(); contentDropZone.classList.add('dragover'); });
+        contentDropZone.addEventListener('dragleave', () => contentDropZone.classList.remove('dragover'));
+        contentDropZone.addEventListener('drop', (e) => handleFileDrop(e, 'content'));
+
+        // Branding drop zone
+        brandingDropZone.addEventListener('click', () => brandingFileInput.click());
+        brandingFileInput.addEventListener('change', (e) => processFiles(Array.from(e.target.files), 'branding'));
+        brandingDropZone.addEventListener('dragover', (e) => { e.preventDefault(); brandingDropZone.classList.add('dragover'); });
+        brandingDropZone.addEventListener('dragleave', () => brandingDropZone.classList.remove('dragover'));
+        brandingDropZone.addEventListener('drop', (e) => handleFileDrop(e, 'branding'));
+
+        // Editor mode
+        editModeBtn.addEventListener('click', toggleEditorMode);
+        editorExit.addEventListener('click', toggleEditorMode);
+        editorAiSuggest.addEventListener('click', handleAiSuggestions);
 
         // --- INITIAL RENDER ---
         generateThumbnails();
