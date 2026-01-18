@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pitch Deck Viewer</title>
+    <title>Pitch Deck Studio</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF.js for PDF parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Mammoth.js for Word docs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <style>
         /* Base styles */
         body {
@@ -34,6 +38,663 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        #slide-container.transitioning {
+            opacity: 0;
+        }
+
+        /* Progress bar */
+        #progress-bar-container {
+            width: 100%;
+            max-width: 1280px;
+            margin: 8px auto 0;
+            height: 4px;
+            background-color: #333;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        #progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3399FF, #8B5CF6);
+            transition: width 0.3s ease;
+            border-radius: 2px;
+        }
+
+        /* Thumbnail panel */
+        #thumbnail-panel {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 200px;
+            height: 100vh;
+            background-color: #111;
+            border-right: 1px solid #333;
+            overflow-y: auto;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            z-index: 100;
+            padding: 10px;
+        }
+
+        #thumbnail-panel.open {
+            transform: translateX(0);
+        }
+
+        #thumbnail-panel h3 {
+            font-size: 14px;
+            font-weight: bold;
+            color: #888;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .thumbnail {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background-color: #222;
+            border: 2px solid #333;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .thumbnail:hover {
+            border-color: #3399FF;
+            transform: scale(1.02);
+        }
+
+        .thumbnail.active {
+            border-color: #3399FF;
+            box-shadow: 0 0 10px rgba(51, 153, 255, 0.5);
+        }
+
+        .thumbnail-number {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background-color: rgba(0,0,0,0.7);
+            color: #fff;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        #thumbnail-toggle {
+            position: fixed;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 99;
+            background-color: #222;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #thumbnail-toggle:hover {
+            background-color: #3399FF;
+            border-color: #3399FF;
+        }
+
+        #thumbnail-toggle.panel-open {
+            left: 210px;
+        }
+
+        /* Timer */
+        #timer-display {
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            color: #3399FF;
+            background-color: #1a1a1a;
+            padding: 8px 16px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #timer-display button {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 4px;
+            transition: color 0.2s;
+        }
+
+        #timer-display button:hover {
+            color: #fff;
+        }
+
+        /* Help overlay */
+        #help-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        #help-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        #help-content {
+            background-color: #1a1a1a;
+            padding: 30px 40px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        #help-content h2 {
+            color: #3399FF;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .shortcut-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .shortcut-row:last-child {
+            border-bottom: none;
+        }
+
+        .shortcut-key {
+            background-color: #333;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        /* Fullscreen mode */
+        body.fullscreen-mode {
+            padding: 0 !important;
+            background-color: #000;
+        }
+
+        body.fullscreen-mode .max-w-6xl > h1,
+        body.fullscreen-mode #progress-bar-container,
+        body.fullscreen-mode .flex.items-center.justify-between {
+            display: none !important;
+        }
+
+        body.fullscreen-mode #slide-deck-container {
+            max-width: 100vw;
+            max-height: 100vh;
+            width: 100vw;
+            height: 100vh;
+            border-radius: 0;
+        }
+
+        /* Fullscreen controls overlay */
+        #fullscreen-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 30px;
+            display: none;
+            gap: 15px;
+            align-items: center;
+            z-index: 500;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        body.fullscreen-mode #fullscreen-controls {
+            display: flex;
+        }
+
+        body.fullscreen-mode:hover #fullscreen-controls,
+        #fullscreen-controls:hover {
+            opacity: 1;
+        }
+
+        #fullscreen-controls button {
+            background: none;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        #fullscreen-controls button:hover {
+            background-color: #3399FF;
+            border-color: #3399FF;
+        }
+
+        #fullscreen-controls .slide-info {
+            color: #888;
+            font-size: 14px;
+        }
+
+        /* Chatbot Sidebar */
+        #chatbot-sidebar {
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 380px;
+            height: 100vh;
+            background-color: #0a0a0a;
+            border-left: 1px solid #333;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 150;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #chatbot-sidebar.open {
+            transform: translateX(0);
+        }
+
+        #chatbot-header {
+            padding: 16px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #chatbot-header h3 {
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #chatbot-header .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #22c55e;
+        }
+
+        #chatbot-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .chat-message {
+            max-width: 90%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .chat-message.user {
+            align-self: flex-end;
+            background-color: #3399FF;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-message.assistant {
+            align-self: flex-start;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-message.system {
+            align-self: center;
+            background-color: transparent;
+            color: #666;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        #chatbot-input-area {
+            padding: 16px;
+            border-top: 1px solid #333;
+        }
+
+        #chatbot-input-area form {
+            display: flex;
+            gap: 8px;
+        }
+
+        #chatbot-input {
+            flex: 1;
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        #chatbot-input:focus {
+            outline: none;
+            border-color: #3399FF;
+        }
+
+        #chatbot-send {
+            background-color: #3399FF;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        #chatbot-send:hover {
+            background-color: #257fdb;
+        }
+
+        #chatbot-toggle {
+            position: fixed;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 149;
+            background-color: #3399FF;
+            border: none;
+            color: #fff;
+            padding: 12px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(51, 153, 255, 0.3);
+        }
+
+        #chatbot-toggle:hover {
+            background-color: #257fdb;
+            transform: translateY(-50%) scale(1.05);
+        }
+
+        #chatbot-toggle.sidebar-open {
+            right: 390px;
+        }
+
+        /* Upload Modal */
+        #upload-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        #upload-modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        #upload-modal {
+            background-color: #111;
+            border: 1px solid #333;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 30px;
+        }
+
+        .upload-section {
+            margin-bottom: 24px;
+        }
+
+        .upload-section h3 {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+
+        .upload-section p {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 16px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #444;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: #0a0a0a;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #3399FF;
+            background-color: rgba(51, 153, 255, 0.05);
+        }
+
+        .drop-zone-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .drop-zone-text {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .drop-zone-text strong {
+            color: #3399FF;
+        }
+
+        .uploaded-files {
+            margin-top: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .uploaded-file {
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .uploaded-file .remove-file {
+            color: #888;
+            cursor: pointer;
+        }
+
+        .uploaded-file .remove-file:hover {
+            color: #ef4444;
+        }
+
+        .branding-preview {
+            display: flex;
+            gap: 16px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .color-swatch {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            border: 2px solid #333;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.1);
+        }
+
+        .color-swatch.selected {
+            border-color: #3399FF;
+            box-shadow: 0 0 10px rgba(51, 153, 255, 0.5);
+        }
+
+        .logo-preview {
+            width: 100px;
+            height: 60px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+
+        /* Editor Mode */
+        body.editor-mode #slide-container .slide-object {
+            cursor: pointer;
+            transition: outline 0.2s ease;
+        }
+
+        body.editor-mode #slide-container .slide-object:hover {
+            outline: 2px solid rgba(51, 153, 255, 0.5);
+        }
+
+        body.editor-mode #slide-container .slide-object.editing {
+            outline: 2px solid #3399FF;
+        }
+
+        #editor-toolbar {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #111;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 8px 16px;
+            display: none;
+            gap: 12px;
+            align-items: center;
+            z-index: 200;
+        }
+
+        body.editor-mode #editor-toolbar {
+            display: flex;
+        }
+
+        #editor-toolbar button {
+            background: none;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        #editor-toolbar button:hover {
+            background-color: #333;
+        }
+
+        #editor-toolbar button.active {
+            background-color: #3399FF;
+            border-color: #3399FF;
+        }
+
+        /* Generation Progress */
+        #generation-progress {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #111;
+            border: 1px solid #333;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            z-index: 3000;
+            display: none;
+        }
+
+        #generation-progress.visible {
+            display: block;
+        }
+
+        #generation-progress h3 {
+            font-size: 20px;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+
+        #generation-progress .progress-bar {
+            width: 300px;
+            height: 8px;
+            background-color: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        #generation-progress .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3399FF, #8B5CF6);
+            transition: width 0.3s ease;
+        }
+
+        #generation-progress .progress-status {
+            color: #888;
+            font-size: 14px;
         }
 
         /* Base class for all slide objects */
@@ -163,8 +824,136 @@
 </head>
 <body class="bg-gray-900 text-white p-4 md:p-8">
 
+    <!-- Thumbnail Panel Toggle Button -->
+    <button id="thumbnail-toggle" title="Toggle slide thumbnails (T)">
+        <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+            <rect x="2" y="2" width="6" height="6" rx="1"/>
+            <rect x="10" y="2" width="6" height="6" rx="1"/>
+            <rect x="2" y="10" width="6" height="6" rx="1"/>
+            <rect x="10" y="10" width="6" height="6" rx="1"/>
+        </svg>
+    </button>
+
+    <!-- Thumbnail Panel -->
+    <div id="thumbnail-panel">
+        <h3>Slides</h3>
+        <div id="thumbnail-list">
+            <!-- Thumbnails generated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Chatbot Toggle Button -->
+    <button id="chatbot-toggle" title="Open AI Assistant (C)">
+        <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+            <circle cx="8" cy="10" r="1.5"/>
+            <circle cx="12" cy="10" r="1.5"/>
+            <circle cx="16" cy="10" r="1.5"/>
+        </svg>
+    </button>
+
+    <!-- Chatbot Sidebar -->
+    <div id="chatbot-sidebar">
+        <div id="chatbot-header">
+            <h3><span class="status-dot"></span> Klair AI Assistant</h3>
+            <button id="chatbot-close" style="background:none;border:none;color:#888;font-size:24px;cursor:pointer;">&times;</button>
+        </div>
+        <div id="chatbot-messages">
+            <div class="chat-message system">Connected to Klair MCP</div>
+            <div class="chat-message assistant">Hi! I can help you analyze the deck data, validate numbers, and answer questions about the financials. What would you like to know?</div>
+        </div>
+        <div id="chatbot-input-area">
+            <form id="chatbot-form">
+                <input type="text" id="chatbot-input" placeholder="Ask about the data..." autocomplete="off">
+                <button type="submit" id="chatbot-send">Send</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Editor Toolbar -->
+    <div id="editor-toolbar">
+        <span style="color: #888; font-size: 12px;">EDIT MODE</span>
+        <button id="editor-add-text" title="Add Text">+ Text</button>
+        <button id="editor-add-shape" title="Add Shape">+ Shape</button>
+        <button id="editor-ai-suggest" title="AI Suggestions">✨ AI Suggest</button>
+        <button id="editor-exit" title="Exit Editor">Exit</button>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal-overlay">
+        <div id="upload-modal">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="font-size: 24px; font-weight: bold; color: #fff;">Create New Deck</h2>
+                <button id="upload-modal-close" style="background:none;border:none;color:#888;font-size:28px;cursor:pointer;">&times;</button>
+            </div>
+
+            <div class="upload-section">
+                <h3>1. Upload Content</h3>
+                <p>Upload documents with your content - PDFs, Word docs, text files, or existing presentations</p>
+                <div class="drop-zone" id="content-drop-zone">
+                    <div class="drop-zone-icon">📄</div>
+                    <div class="drop-zone-text">
+                        Drag & drop files here or <strong>click to browse</strong><br>
+                        <small>PDF, DOCX, TXT, PPTX supported</small>
+                    </div>
+                    <input type="file" id="content-file-input" multiple accept=".pdf,.docx,.doc,.txt,.pptx,.ppt" style="display:none;">
+                </div>
+                <div class="uploaded-files" id="content-files-list"></div>
+            </div>
+
+            <div class="upload-section">
+                <h3>2. Upload Branding</h3>
+                <p>Upload logos, style guides, or images to extract your brand colors and assets</p>
+                <div class="drop-zone" id="branding-drop-zone">
+                    <div class="drop-zone-icon">🎨</div>
+                    <div class="drop-zone-text">
+                        Drag & drop branding assets or <strong>click to browse</strong><br>
+                        <small>PNG, JPG, SVG, PDF supported</small>
+                    </div>
+                    <input type="file" id="branding-file-input" multiple accept=".png,.jpg,.jpeg,.svg,.pdf" style="display:none;">
+                </div>
+                <div class="uploaded-files" id="branding-files-list"></div>
+                <div class="branding-preview" id="branding-preview"></div>
+            </div>
+
+            <div class="upload-section">
+                <h3>3. Deck Settings</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="display: block; color: #888; font-size: 14px; margin-bottom: 8px;">Deck Title</label>
+                        <input type="text" id="deck-title-input" placeholder="e.g., Q4 Investor Update" style="width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 10px; color: #fff;">
+                    </div>
+                    <div>
+                        <label style="display: block; color: #888; font-size: 14px; margin-bottom: 8px;">Deck Type</label>
+                        <select id="deck-type-select" style="width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 10px; color: #fff;">
+                            <option value="pitch">Pitch Deck</option>
+                            <option value="sales">Sales Deck</option>
+                            <option value="report">Report/Update</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+                <button id="upload-cancel" style="background: #333; border: none; color: #fff; padding: 12px 24px; border-radius: 8px; cursor: pointer;">Cancel</button>
+                <button id="upload-generate" style="background: linear-gradient(90deg, #3399FF, #8B5CF6); border: none; color: #fff; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold;">✨ Generate Deck</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generation Progress -->
+    <div id="generation-progress">
+        <div class="loader" style="margin-bottom: 20px;"></div>
+        <h3>Generating Your Deck</h3>
+        <div class="progress-bar">
+            <div class="progress-fill" id="generation-progress-fill" style="width: 0%;"></div>
+        </div>
+        <div class="progress-status" id="generation-status">Analyzing content...</div>
+    </div>
+
     <div class="max-w-6xl mx-auto">
-        <h1 class="text-3xl font-bold text-center mb-6">Investor Overview - Q4 2025</h1>
+        <h1 class="text-3xl font-bold text-center mb-6" id="deck-title">Investor Overview - Q4 2025</h1>
 
         <!-- Slide Deck Container -->
         <div id="slide-deck-container" class="bg-black">
@@ -173,23 +962,107 @@
             </div>
         </div>
 
+        <!-- Progress Bar -->
+        <div id="progress-bar-container">
+            <div id="progress-bar" style="width: 6.25%;"></div>
+        </div>
+
         <!-- Navigation Controls -->
-        <div class="flex items-center justify-between mt-6 max-w-2xl mx-auto">
-            <button id="prev-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
-                Previous
+        <div class="flex items-center justify-between mt-6 max-w-5xl mx-auto flex-wrap gap-3">
+            <button id="new-deck-btn" class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out" title="Create new deck (N)">
+                + New Deck
             </button>
-            
-            <button id="speaker-notes-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out">
-                ✨ Generate Speaker Notes
+
+            <button id="prev-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                ← Prev
             </button>
-            
-            <div id="slide-counter" class="text-xl font-medium text-gray-300">
-                Slide 1 / 16
+
+            <div id="slide-counter" class="text-lg font-medium text-gray-300">
+                1 / 16
             </div>
-            
-            <button id="next-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
-                Next
+
+            <button id="next-slide" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                Next →
             </button>
+
+            <!-- Timer -->
+            <div id="timer-display">
+                <span id="timer-time">00:00</span>
+                <button id="timer-toggle" title="Start/Pause timer">▶</button>
+                <button id="timer-reset" title="Reset timer">↺</button>
+            </div>
+
+            <button id="edit-mode-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out" title="Edit slides (E)">
+                ✏️ Edit
+            </button>
+
+            <button id="speaker-notes-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out">
+                ✨ Notes
+            </button>
+
+            <button id="fullscreen-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 ease-in-out" title="Fullscreen (F)">
+                ⛶ Present
+            </button>
+
+            <button id="help-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg transition duration-200 ease-in-out" title="Keyboard shortcuts (?)">
+                ?
+            </button>
+        </div>
+    </div>
+
+    <!-- Fullscreen Controls Overlay -->
+    <div id="fullscreen-controls">
+        <button id="fs-prev">← Prev</button>
+        <span class="slide-info"><span id="fs-slide-counter">1 / 16</span></span>
+        <button id="fs-next">Next →</button>
+        <button id="fs-exit">Exit (Esc)</button>
+    </div>
+
+    <!-- Help Overlay -->
+    <div id="help-overlay">
+        <div id="help-content">
+            <h2>Keyboard Shortcuts</h2>
+            <div class="shortcut-row">
+                <span>Next slide</span>
+                <span class="shortcut-key">→</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Previous slide</span>
+                <span class="shortcut-key">←</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Toggle fullscreen</span>
+                <span class="shortcut-key">F</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Toggle thumbnails</span>
+                <span class="shortcut-key">T</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Start/stop timer</span>
+                <span class="shortcut-key">Space</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Show help</span>
+                <span class="shortcut-key">?</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Open AI Chat</span>
+                <span class="shortcut-key">C</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Create new deck</span>
+                <span class="shortcut-key">N</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Toggle editor mode</span>
+                <span class="shortcut-key">E</span>
+            </div>
+            <div class="shortcut-row">
+                <span>Close modal / Exit fullscreen</span>
+                <span class="shortcut-key">Esc</span>
+            </div>
+            <p class="text-gray-500 text-sm mt-6 text-center">Press any key to close</p>
         </div>
     </div>
 
@@ -456,12 +1329,129 @@
         const nextButton = document.getElementById('next-slide');
         const slideCounter = document.getElementById('slide-counter');
         const speakerNotesButton = document.getElementById('speaker-notes-btn');
-        
+
         const modalOverlay = document.getElementById('gemini-modal-overlay');
         const modal = document.getElementById('gemini-modal');
         const modalTitle = document.getElementById('gemini-modal-title');
         const modalContent = document.getElementById('gemini-modal-content');
         const modalCloseButton = document.getElementById('gemini-modal-close');
+
+        // New UI elements
+        const progressBar = document.getElementById('progress-bar');
+        const thumbnailPanel = document.getElementById('thumbnail-panel');
+        const thumbnailToggle = document.getElementById('thumbnail-toggle');
+        const thumbnailList = document.getElementById('thumbnail-list');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const helpBtn = document.getElementById('help-btn');
+        const helpOverlay = document.getElementById('help-overlay');
+        const timerDisplay = document.getElementById('timer-time');
+        const timerToggleBtn = document.getElementById('timer-toggle');
+        const timerResetBtn = document.getElementById('timer-reset');
+        const fsSlideCounter = document.getElementById('fs-slide-counter');
+        const fsPrevBtn = document.getElementById('fs-prev');
+        const fsNextBtn = document.getElementById('fs-next');
+        const fsExitBtn = document.getElementById('fs-exit');
+
+        // Timer state
+        let timerSeconds = 0;
+        let timerInterval = null;
+        let timerRunning = false;
+
+        // Touch/swipe state
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        // New UI elements
+        const chatbotSidebar = document.getElementById('chatbot-sidebar');
+        const chatbotToggle = document.getElementById('chatbot-toggle');
+        const chatbotClose = document.getElementById('chatbot-close');
+        const chatbotMessages = document.getElementById('chatbot-messages');
+        const chatbotForm = document.getElementById('chatbot-form');
+        const chatbotInput = document.getElementById('chatbot-input');
+        const uploadModalOverlay = document.getElementById('upload-modal-overlay');
+        const uploadModalClose = document.getElementById('upload-modal-close');
+        const uploadCancel = document.getElementById('upload-cancel');
+        const uploadGenerate = document.getElementById('upload-generate');
+        const newDeckBtn = document.getElementById('new-deck-btn');
+        const editModeBtn = document.getElementById('edit-mode-btn');
+        const editorExit = document.getElementById('editor-exit');
+        const editorAiSuggest = document.getElementById('editor-ai-suggest');
+        const contentDropZone = document.getElementById('content-drop-zone');
+        const contentFileInput = document.getElementById('content-file-input');
+        const contentFilesList = document.getElementById('content-files-list');
+        const brandingDropZone = document.getElementById('branding-drop-zone');
+        const brandingFileInput = document.getElementById('branding-file-input');
+        const brandingFilesList = document.getElementById('branding-files-list');
+        const brandingPreview = document.getElementById('branding-preview');
+        const generationProgress = document.getElementById('generation-progress');
+        const generationProgressFill = document.getElementById('generation-progress-fill');
+        const generationStatus = document.getElementById('generation-status');
+        const deckTitleElement = document.getElementById('deck-title');
+        const deckTitleInput = document.getElementById('deck-title-input');
+        const deckTypeSelect = document.getElementById('deck-type-select');
+
+        // Upload state
+        let uploadedContentFiles = [];
+        let uploadedBrandingFiles = [];
+        let extractedContent = '';
+        let extractedBranding = { colors: [], logos: [] };
+
+        // Editor state
+        let editorMode = false;
+        let selectedElement = null;
+
+        // Chat history for context
+        let chatHistory = [];
+
+        // Klair MCP proxy configuration
+        const KLAIR_PROXY_URL = 'http://localhost:3001';
+        let klairConnected = false;
+        let klairTools = [];
+
+        // Check Klair connection on load
+        async function checkKlairConnection() {
+            try {
+                const response = await fetch(`${KLAIR_PROXY_URL}/api/status`, { method: 'GET' });
+                if (response.ok) {
+                    const data = await response.json();
+                    klairConnected = data.connected;
+                    klairTools = data.tools || [];
+                    updateChatbotStatus(klairConnected);
+                    if (klairConnected) {
+                        addChatMessage(`Connected to Klair MCP with ${klairTools.length} tools available.`, 'system');
+                    }
+                }
+            } catch (e) {
+                klairConnected = false;
+                updateChatbotStatus(false);
+            }
+        }
+
+        // Update chatbot status indicator
+        function updateChatbotStatus(connected) {
+            const statusDot = document.querySelector('#chatbot-header .status-dot');
+            if (statusDot) {
+                statusDot.style.backgroundColor = connected ? '#22c55e' : '#f59e0b';
+                statusDot.title = connected ? 'Connected to Klair MCP' : 'Using Gemini (Klair proxy not running)';
+            }
+        }
+
+        // Call Klair MCP tool via proxy
+        async function callKlairTool(toolName, args) {
+            try {
+                const response = await fetch(`${KLAIR_PROXY_URL}/api/tools/${toolName}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(args)
+                });
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (e) {
+                console.error('Klair tool call error:', e);
+            }
+            return null;
+        }
 
         // --- GEMINI API FUNCTIONS ---
 
@@ -814,16 +1804,25 @@
                 slideContainer.appendChild(el);
             });
 
-            // --- SPECIAL GEMINI FEATURE ---
-            // Add "Analyze" button only to slide 13
-            if (slide.slideNumber === 13) {
-                const analyzeButton = document.createElement('button');
-                analyzeButton.className = 'on-slide-button';
-                analyzeButton.textContent = '✨ Analyze Competitors';
-                analyzeButton.style.left = toPercent(900, 'width'); // Position it on the slide
-                analyzeButton.style.top = toPercent(85, 'height');
-                analyzeButton.addEventListener('click', handleAnalyzeCompetitors);
-                slideContainer.appendChild(analyzeButton);
+            // --- SPECIAL GEMINI FEATURES ---
+            // Add AI-powered buttons to specific slides
+            const slideButtons = {
+                4: { text: '✨ Explore Texas Market', handler: handleExploreTexasMarket, x: 1000, y: 50 },
+                9: { text: '✨ Research Leader', handler: handleResearchLeader, x: 50, y: 630 },
+                12: { text: '✨ Analyze Projections', handler: handleAnalyzeProjections, x: 900, y: 85 },
+                13: { text: '✨ Analyze Competitors', handler: handleAnalyzeCompetitors, x: 900, y: 85 },
+                15: { text: '✨ Valuation Analysis', handler: handleValuationAnalysis, x: 900, y: 85 }
+            };
+
+            if (slideButtons[slide.slideNumber]) {
+                const config = slideButtons[slide.slideNumber];
+                const aiButton = document.createElement('button');
+                aiButton.className = 'on-slide-button';
+                aiButton.textContent = config.text;
+                aiButton.style.left = toPercent(config.x, 'width');
+                aiButton.style.top = toPercent(config.y, 'height');
+                aiButton.addEventListener('click', config.handler);
+                slideContainer.appendChild(aiButton);
             }
 
             updateControls();
@@ -834,8 +1833,213 @@
          */
         function updateControls() {
             slideCounter.textContent = `Slide ${currentSlideIndex + 1} / ${totalSlides}`;
+            fsSlideCounter.textContent = `${currentSlideIndex + 1} / ${totalSlides}`;
             prevButton.disabled = (currentSlideIndex === 0);
             nextButton.disabled = (currentSlideIndex === totalSlides - 1);
+
+            // Update progress bar
+            const progress = ((currentSlideIndex + 1) / totalSlides) * 100;
+            progressBar.style.width = `${progress}%`;
+
+            // Update thumbnail active state
+            document.querySelectorAll('.thumbnail').forEach((thumb, index) => {
+                thumb.classList.toggle('active', index === currentSlideIndex);
+            });
+        }
+
+        // --- THUMBNAIL FUNCTIONS ---
+
+        /**
+         * Generates thumbnail elements for all slides.
+         */
+        function generateThumbnails() {
+            thumbnailList.innerHTML = '';
+            slides.forEach((slide, index) => {
+                const thumb = document.createElement('div');
+                thumb.className = 'thumbnail' + (index === currentSlideIndex ? ' active' : '');
+                thumb.dataset.index = index;
+
+                // Create a mini preview with slide title
+                const title = getSlideTitle(slide);
+                thumb.innerHTML = `
+                    <div style="padding: 6px; font-size: 9px; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${title}
+                    </div>
+                    <span class="thumbnail-number">${index + 1}</span>
+                `;
+                thumb.style.backgroundColor = formatColor(slide.backgroundColor || deckData.theme.backgroundColor);
+
+                thumb.addEventListener('click', () => goToSlide(index));
+                thumbnailList.appendChild(thumb);
+            });
+        }
+
+        /**
+         * Gets the title from a slide for thumbnail display.
+         */
+        function getSlideTitle(slide) {
+            const textObj = slide.objects.find(obj => obj.type === 'text' && obj.fontSize >= 24);
+            if (textObj) {
+                return textObj.text.split('\n')[0].substring(0, 30);
+            }
+            return `Slide ${slide.slideNumber}`;
+        }
+
+        /**
+         * Toggles the thumbnail panel visibility.
+         */
+        function toggleThumbnailPanel() {
+            thumbnailPanel.classList.toggle('open');
+            thumbnailToggle.classList.toggle('panel-open');
+        }
+
+        // --- TIMER FUNCTIONS ---
+
+        /**
+         * Formats seconds into MM:SS format.
+         */
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        /**
+         * Toggles the presentation timer.
+         */
+        function toggleTimer() {
+            if (timerRunning) {
+                clearInterval(timerInterval);
+                timerToggleBtn.textContent = '▶';
+                timerRunning = false;
+            } else {
+                timerInterval = setInterval(() => {
+                    timerSeconds++;
+                    timerDisplay.textContent = formatTime(timerSeconds);
+                }, 1000);
+                timerToggleBtn.textContent = '⏸';
+                timerRunning = true;
+            }
+        }
+
+        /**
+         * Resets the presentation timer.
+         */
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timerSeconds = 0;
+            timerDisplay.textContent = '00:00';
+            timerToggleBtn.textContent = '▶';
+            timerRunning = false;
+        }
+
+        // --- FULLSCREEN FUNCTIONS ---
+
+        /**
+         * Toggles fullscreen presentation mode.
+         */
+        function toggleFullscreen() {
+            document.body.classList.toggle('fullscreen-mode');
+            if (document.body.classList.contains('fullscreen-mode')) {
+                fullscreenBtn.textContent = '⛶ Exit';
+                // Auto-start timer when entering presentation mode
+                if (!timerRunning) {
+                    toggleTimer();
+                }
+            } else {
+                fullscreenBtn.textContent = '⛶ Present';
+            }
+        }
+
+        /**
+         * Exits fullscreen mode.
+         */
+        function exitFullscreen() {
+            document.body.classList.remove('fullscreen-mode');
+            fullscreenBtn.textContent = '⛶ Present';
+        }
+
+        // --- HELP FUNCTIONS ---
+
+        /**
+         * Shows the help overlay.
+         */
+        function showHelp() {
+            helpOverlay.classList.add('visible');
+        }
+
+        /**
+         * Hides the help overlay.
+         */
+        function hideHelp() {
+            helpOverlay.classList.remove('visible');
+        }
+
+        // --- NAVIGATION FUNCTIONS ---
+
+        /**
+         * Goes to a specific slide with transition.
+         */
+        function goToSlide(index) {
+            if (index < 0 || index >= totalSlides || index === currentSlideIndex) return;
+
+            slideContainer.classList.add('transitioning');
+            setTimeout(() => {
+                currentSlideIndex = index;
+                renderSlide(currentSlideIndex);
+                slideContainer.classList.remove('transitioning');
+            }, 150);
+        }
+
+        /**
+         * Navigates to next slide.
+         */
+        function nextSlide() {
+            if (currentSlideIndex < totalSlides - 1) {
+                goToSlide(currentSlideIndex + 1);
+            }
+        }
+
+        /**
+         * Navigates to previous slide.
+         */
+        function prevSlide() {
+            if (currentSlideIndex > 0) {
+                goToSlide(currentSlideIndex - 1);
+            }
+        }
+
+        // --- TOUCH/SWIPE FUNCTIONS ---
+
+        /**
+         * Handles touch start event.
+         */
+        function handleTouchStart(e) {
+            touchStartX = e.changedTouches[0].screenX;
+        }
+
+        /**
+         * Handles touch end event and determines swipe direction.
+         */
+        function handleTouchEnd(e) {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }
+
+        /**
+         * Processes swipe gesture.
+         */
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const diff = touchStartX - touchEndX;
+
+            if (Math.abs(diff) > swipeThreshold) {
+                if (diff > 0) {
+                    nextSlide(); // Swipe left = next
+                } else {
+                    prevSlide(); // Swipe right = previous
+                }
+            }
         }
 
         // --- EVENT HANDLERS ---
@@ -873,24 +2077,620 @@
             showModal("✨ Market Analysis", htmlContent);
         }
 
+        /**
+         * Handles the click for "Analyze Projections" (Slide 12 - Financial).
+         */
+        async function handleAnalyzeProjections() {
+            const slide = slides[11]; // Slide 12 is index 11
+            const slideText = extractTextFromSlide(slide);
+
+            const systemPrompt = "You are a financial analyst specializing in EdTech and education startups. Analyze the financial projections provided. Comment on: 1) The growth trajectory and whether it's realistic, 2) The EBITDA margins, 3) Key risks and assumptions, 4) How it compares to typical EdTech growth. Be concise but insightful.";
+            const userPrompt = `Analyze these financial projections for a sports academy:\n\n${slideText}`;
+
+            showModal("Analyzing Projections...", "", true);
+
+            const { text } = await callGemini(systemPrompt, userPrompt, false);
+            const htmlContent = formatTextToHtml(text);
+
+            showModal("✨ Financial Analysis", `<div>${htmlContent}</div>`);
+        }
+
+        /**
+         * Handles the click for "Research Leader" (Slide 9 - Team).
+         */
+        async function handleResearchLeader() {
+            const systemPrompt = "You are a business researcher. Find and summarize information about Joe Liemandt, focusing on his business background, notable achievements, and his involvement in education. Provide 4-5 key facts in bullet point format.";
+            const userPrompt = "Research Joe Liemandt, billionaire entrepreneur and founder. What is his background with Trilogy Software and his recent education ventures?";
+
+            showModal("Researching...", "", true);
+
+            const { text, sources } = await callGemini(systemPrompt, userPrompt, true);
+            const htmlContent = `<ul>${formatTextToHtml(text)}</ul>` + formatSources(sources);
+
+            showModal("✨ Leadership Research", htmlContent);
+        }
+
+        /**
+         * Handles the click for "Explore Texas Market" (Slide 4).
+         */
+        async function handleExploreTexasMarket() {
+            const systemPrompt = "You are a market research analyst. Provide insights on why Texas is an attractive market for education startups and private schools. Focus on: demographics, school choice policies, economic factors, and competition. Format as concise bullet points.";
+            const userPrompt = "Research the Texas education market: Why is Texas a good state for private schools and education startups? What are the key demographic and policy factors?";
+
+            showModal("Researching Texas Market...", "", true);
+
+            const { text, sources } = await callGemini(systemPrompt, userPrompt, true);
+            const htmlContent = `<ul>${formatTextToHtml(text)}</ul>` + formatSources(sources);
+
+            showModal("✨ Texas Market Insights", htmlContent);
+        }
+
+        /**
+         * Handles the click for "Valuation Analysis" (Slide 15 - Required Capital).
+         */
+        async function handleValuationAnalysis() {
+            const slide = slides[14]; // Slide 15 is index 14
+            const slideText = extractTextFromSlide(slide);
+
+            const systemPrompt = "You are an investment analyst. Analyze the funding ask and valuation. Comment on: 1) Whether a $1B pre-money valuation is reasonable, 2) How the use of funds breakdown looks, 3) Comparable deals in EdTech. Be direct and analytical.";
+            const userPrompt = `Analyze this funding ask and valuation:\n\n${slideText}`;
+
+            showModal("Analyzing Valuation...", "", true);
+
+            const { text } = await callGemini(systemPrompt, userPrompt, false);
+            const htmlContent = formatTextToHtml(text);
+
+            showModal("✨ Valuation Analysis", `<div>${htmlContent}</div>`);
+        }
+
+
+        // --- CHATBOT FUNCTIONS ---
+
+        /**
+         * Toggles the chatbot sidebar.
+         */
+        function toggleChatbot() {
+            chatbotSidebar.classList.toggle('open');
+            chatbotToggle.classList.toggle('sidebar-open');
+        }
+
+        /**
+         * Adds a message to the chatbot.
+         */
+        function addChatMessage(content, role = 'assistant') {
+            const msg = document.createElement('div');
+            msg.className = `chat-message ${role}`;
+            msg.textContent = content;
+            chatbotMessages.appendChild(msg);
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+        }
+
+        /**
+         * Handles chatbot form submission.
+         * Tries Klair MCP first, falls back to Gemini.
+         */
+        async function handleChatSubmit(e) {
+            e.preventDefault();
+            const message = chatbotInput.value.trim();
+            if (!message) return;
+
+            addChatMessage(message, 'user');
+            chatbotInput.value = '';
+
+            // Build context from current deck data
+            const currentSlide = slides[currentSlideIndex];
+            const slideText = extractTextFromSlide(currentSlide);
+            const allDeckText = slides.map(s => extractTextFromSlide(s)).join('\n\n');
+
+            // Add to chat history
+            chatHistory.push({ role: 'user', content: message });
+
+            // Show typing indicator
+            const typingMsg = document.createElement('div');
+            typingMsg.className = 'chat-message assistant';
+            typingMsg.innerHTML = '<span class="loader" style="width:20px;height:20px;border-width:2px;"></span>';
+            chatbotMessages.appendChild(typingMsg);
+
+            try {
+                let responseText = '';
+
+                // Try Klair MCP if connected
+                if (klairConnected && klairTools.length > 0) {
+                    // Check if user is asking about specific data that Klair tools can provide
+                    const lowerMessage = message.toLowerCase();
+
+                    // Look for matching tools
+                    for (const tool of klairTools) {
+                        const toolLower = tool.name.toLowerCase();
+                        if (lowerMessage.includes(toolLower) ||
+                            (tool.description && lowerMessage.includes(tool.description.toLowerCase().split(' ')[0]))) {
+                            const result = await callKlairTool(tool.name, { query: message, context: slideText });
+                            if (result && result.result) {
+                                responseText = `[Klair Data] ${JSON.stringify(result.result, null, 2)}`;
+                                break;
+                            }
+                        }
+                    }
+
+                    // If no specific tool matched, try generic query
+                    if (!responseText) {
+                        const queryResult = await fetch(`${KLAIR_PROXY_URL}/api/query`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ query: message, context: { slide: slideText, deck: allDeckText } })
+                        });
+                        if (queryResult.ok) {
+                            const data = await queryResult.json();
+                            if (data.response) {
+                                responseText = data.response;
+                            }
+                        }
+                    }
+                }
+
+                // Fall back to Gemini if Klair didn't provide a response
+                if (!responseText) {
+                    const systemPrompt = `You are Klair, an AI assistant connected to a pitch deck viewer. You have access to the current deck data and can help users:
+1. Validate and check numbers in the deck
+2. Answer questions about the financials and projections
+3. Compare data points across slides
+4. Suggest improvements to the content
+
+Current slide content:
+${slideText}
+
+Full deck summary data:
+${allDeckText}
+
+${klairConnected ? 'You are connected to Klair MCP for real-time data. Available tools: ' + klairTools.map(t => t.name).join(', ') : 'Running in offline mode - using deck data only.'}
+
+Respond concisely and helpfully. If asked about specific numbers, reference where they appear in the deck.`;
+
+                    const userPrompt = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
+                    const { text } = await callGemini(systemPrompt, userPrompt, false);
+                    responseText = text;
+                }
+
+                typingMsg.remove();
+                addChatMessage(responseText, 'assistant');
+                chatHistory.push({ role: 'assistant', content: responseText });
+
+            } catch (error) {
+                typingMsg.remove();
+                addChatMessage('Sorry, I encountered an error. Please try again.', 'assistant');
+            }
+        }
+
+        // --- UPLOAD & FILE PROCESSING FUNCTIONS ---
+
+        /**
+         * Shows the upload modal.
+         */
+        function showUploadModal() {
+            uploadModalOverlay.classList.add('visible');
+            // Reset state
+            uploadedContentFiles = [];
+            uploadedBrandingFiles = [];
+            extractedContent = '';
+            extractedBranding = { colors: [], logos: [] };
+            contentFilesList.innerHTML = '';
+            brandingFilesList.innerHTML = '';
+            brandingPreview.innerHTML = '';
+            deckTitleInput.value = '';
+        }
+
+        /**
+         * Hides the upload modal.
+         */
+        function hideUploadModal() {
+            uploadModalOverlay.classList.remove('visible');
+        }
+
+        /**
+         * Handles file drop on a drop zone.
+         */
+        function handleFileDrop(e, type) {
+            e.preventDefault();
+            e.target.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files);
+            processFiles(files, type);
+        }
+
+        /**
+         * Processes uploaded files.
+         */
+        async function processFiles(files, type) {
+            for (const file of files) {
+                if (type === 'content') {
+                    uploadedContentFiles.push(file);
+                    addFileToList(file, contentFilesList, 'content');
+                    await extractContentFromFile(file);
+                } else {
+                    uploadedBrandingFiles.push(file);
+                    addFileToList(file, brandingFilesList, 'branding');
+                    await extractBrandingFromFile(file);
+                }
+            }
+        }
+
+        /**
+         * Adds a file to the display list.
+         */
+        function addFileToList(file, listElement, type) {
+            const fileEl = document.createElement('div');
+            fileEl.className = 'uploaded-file';
+            fileEl.innerHTML = `
+                <span>${file.name}</span>
+                <span class="remove-file" data-name="${file.name}" data-type="${type}">&times;</span>
+            `;
+            fileEl.querySelector('.remove-file').addEventListener('click', (e) => {
+                const name = e.target.dataset.name;
+                const fileType = e.target.dataset.type;
+                if (fileType === 'content') {
+                    uploadedContentFiles = uploadedContentFiles.filter(f => f.name !== name);
+                } else {
+                    uploadedBrandingFiles = uploadedBrandingFiles.filter(f => f.name !== name);
+                }
+                fileEl.remove();
+            });
+            listElement.appendChild(fileEl);
+        }
+
+        /**
+         * Extracts text content from various file types.
+         */
+        async function extractContentFromFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+
+            if (ext === 'txt') {
+                const text = await file.text();
+                extractedContent += '\n\n' + text;
+            } else if (ext === 'pdf') {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let text = '';
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const content = await page.getTextContent();
+                        text += content.items.map(item => item.str).join(' ') + '\n\n';
+                    }
+                    extractedContent += '\n\n' + text;
+                } catch (e) {
+                    console.error('PDF extraction error:', e);
+                }
+            } else if (ext === 'docx' || ext === 'doc') {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.extractRawText({ arrayBuffer });
+                    extractedContent += '\n\n' + result.value;
+                } catch (e) {
+                    console.error('DOCX extraction error:', e);
+                }
+            }
+        }
+
+        /**
+         * Extracts branding colors from images.
+         */
+        async function extractBrandingFromFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+
+            if (['png', 'jpg', 'jpeg', 'svg'].includes(ext)) {
+                // Create image and extract colors
+                const url = URL.createObjectURL(file);
+
+                // Add logo preview
+                const logoDiv = document.createElement('div');
+                logoDiv.className = 'logo-preview';
+                logoDiv.style.backgroundImage = `url(${url})`;
+                brandingPreview.appendChild(logoDiv);
+                extractedBranding.logos.push(url);
+
+                // Extract dominant colors using canvas
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+
+                    try {
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const colors = extractDominantColors(imageData.data);
+                        colors.forEach(color => {
+                            if (!extractedBranding.colors.includes(color)) {
+                                extractedBranding.colors.push(color);
+                                addColorSwatch(color);
+                            }
+                        });
+                    } catch (e) {
+                        console.error('Color extraction error:', e);
+                    }
+                };
+                img.src = url;
+            }
+        }
+
+        /**
+         * Extracts dominant colors from image data.
+         */
+        function extractDominantColors(data) {
+            const colorCounts = {};
+            for (let i = 0; i < data.length; i += 4) {
+                const r = Math.round(data[i] / 32) * 32;
+                const g = Math.round(data[i + 1] / 32) * 32;
+                const b = Math.round(data[i + 2] / 32) * 32;
+                const a = data[i + 3];
+                if (a < 128) continue; // Skip transparent
+                const color = `${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+                colorCounts[color] = (colorCounts[color] || 0) + 1;
+            }
+
+            return Object.entries(colorCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([color]) => color.toUpperCase());
+        }
+
+        /**
+         * Adds a color swatch to the branding preview.
+         */
+        function addColorSwatch(color) {
+            const swatch = document.createElement('div');
+            swatch.className = 'color-swatch';
+            swatch.style.backgroundColor = `#${color}`;
+            swatch.title = `#${color}`;
+            swatch.addEventListener('click', () => swatch.classList.toggle('selected'));
+            brandingPreview.appendChild(swatch);
+        }
+
+        // --- DECK GENERATION FUNCTIONS ---
+
+        /**
+         * Generates a new deck from uploaded content.
+         */
+        async function generateDeck() {
+            if (!extractedContent.trim()) {
+                alert('Please upload some content first.');
+                return;
+            }
+
+            hideUploadModal();
+            showGenerationProgress();
+
+            const title = deckTitleInput.value || 'New Presentation';
+            const deckType = deckTypeSelect.value;
+            const colors = extractedBranding.colors.length > 0
+                ? extractedBranding.colors
+                : ['3399FF', 'FFFFFF', '000000'];
+
+            updateProgress(10, 'Analyzing content...');
+
+            const systemPrompt = `You are an expert pitch deck designer. Generate a complete pitch deck in JSON format based on the provided content.
+
+The deck should follow this exact structure:
+{
+  "theme": {
+    "themeName": "Custom",
+    "slideWidth": 1280,
+    "slideHeight": 720,
+    "backgroundColor": "${colors[2] || '000000'}",
+    "fontFamily": "Inter",
+    "primaryColor": "${colors[1] || 'FFFFFF'}",
+    "secondaryColor": "${colors[0] || '3399FF'}"
+  },
+  "slides": [
+    {
+      "slideNumber": 1,
+      "backgroundColor": "000000",
+      "objects": [
+        { "type": "text", "text": "Title", "x": 50, "y": 100, "width": 1180, "height": 100, "fontSize": 60, "fontWeight": "bold", "color": "FFFFFF", "horizontalAlign": "center" }
+      ]
+    }
+  ]
+}
+
+Object types available:
+- text: { type, text, x, y, width, height, fontSize, fontWeight, color, horizontalAlign }
+- shape: { type, shapeType: "rectangle", x, y, width, height, backgroundColor, borderRadius }
+- image: { type, url, x, y, width, height, objectFit, opacity, borderRadius }
+
+For a ${deckType} deck, create 8-12 slides with appropriate structure:
+- Cover slide with title
+- Problem/Opportunity slide
+- Solution slide
+- Key metrics/data slides
+- Team/About slide (if relevant)
+- Call to action/closing slide
+
+Use the brand colors: Primary: #${colors[0]}, Secondary: #${colors[1] || 'FFFFFF'}
+
+IMPORTANT: Return ONLY valid JSON, no markdown or explanation.`;
+
+            const userPrompt = `Create a ${deckType} deck titled "${title}" from this content:\n\n${extractedContent.substring(0, 8000)}`;
+
+            updateProgress(30, 'Generating slide structure...');
+
+            try {
+                const { text } = await callGemini(systemPrompt, userPrompt, false);
+                updateProgress(70, 'Building slides...');
+
+                // Parse the JSON response
+                let newDeckData;
+                try {
+                    // Try to extract JSON from the response
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        newDeckData = JSON.parse(jsonMatch[0]);
+                    } else {
+                        throw new Error('No JSON found in response');
+                    }
+                } catch (parseError) {
+                    console.error('JSON parse error:', parseError);
+                    updateProgress(100, 'Error parsing response. Using default structure.');
+                    await sleep(1500);
+                    hideGenerationProgress();
+                    return;
+                }
+
+                updateProgress(90, 'Finalizing deck...');
+
+                // Update the global deckData
+                deckData.theme = newDeckData.theme || deckData.theme;
+                deckData.slides = newDeckData.slides || [];
+
+                // Re-initialize with new data
+                slides.length = 0;
+                deckData.slides.forEach(s => slides.push(s));
+                currentSlideIndex = 0;
+
+                updateProgress(100, 'Done!');
+                await sleep(500);
+                hideGenerationProgress();
+
+                // Update UI
+                deckTitleElement.textContent = title;
+                generateThumbnails();
+                renderSlide(0);
+
+            } catch (error) {
+                console.error('Generation error:', error);
+                updateProgress(100, 'Error generating deck. Please try again.');
+                await sleep(2000);
+                hideGenerationProgress();
+            }
+        }
+
+        /**
+         * Shows the generation progress overlay.
+         */
+        function showGenerationProgress() {
+            generationProgress.classList.add('visible');
+        }
+
+        /**
+         * Hides the generation progress overlay.
+         */
+        function hideGenerationProgress() {
+            generationProgress.classList.remove('visible');
+            generationProgressFill.style.width = '0%';
+        }
+
+        /**
+         * Updates the generation progress.
+         */
+        function updateProgress(percent, status) {
+            generationProgressFill.style.width = `${percent}%`;
+            generationStatus.textContent = status;
+        }
+
+        // --- EDITOR MODE FUNCTIONS ---
+
+        /**
+         * Toggles editor mode.
+         */
+        function toggleEditorMode() {
+            editorMode = !editorMode;
+            document.body.classList.toggle('editor-mode', editorMode);
+            editModeBtn.classList.toggle('bg-yellow-600', !editorMode);
+            editModeBtn.classList.toggle('bg-red-600', editorMode);
+            editModeBtn.textContent = editorMode ? '✏️ Editing' : '✏️ Edit';
+
+            if (editorMode) {
+                makeSlideEditable();
+            } else {
+                renderSlide(currentSlideIndex);
+            }
+        }
+
+        /**
+         * Makes the current slide editable.
+         */
+        function makeSlideEditable() {
+            const slideElements = slideContainer.querySelectorAll('.slide-object');
+            slideElements.forEach((el, index) => {
+                el.addEventListener('click', (e) => handleElementClick(e, index));
+                el.addEventListener('dblclick', (e) => handleElementDoubleClick(e, index));
+            });
+        }
+
+        /**
+         * Handles click on editable element.
+         */
+        function handleElementClick(e, index) {
+            if (!editorMode) return;
+            e.stopPropagation();
+
+            // Deselect previous
+            document.querySelectorAll('.slide-object.editing').forEach(el => el.classList.remove('editing'));
+
+            // Select this element
+            e.target.classList.add('editing');
+            selectedElement = { element: e.target, index };
+        }
+
+        /**
+         * Handles double-click to edit text.
+         */
+        function handleElementDoubleClick(e, index) {
+            if (!editorMode) return;
+            e.stopPropagation();
+
+            const el = e.target;
+            if (!el.classList.contains('slide-text')) return;
+
+            const currentText = el.textContent;
+            el.contentEditable = true;
+            el.focus();
+
+            el.addEventListener('blur', () => {
+                el.contentEditable = false;
+                // Update the data
+                const slide = slides[currentSlideIndex];
+                const textObjects = slide.objects.filter(o => o.type === 'text');
+                if (textObjects[index]) {
+                    textObjects[index].text = el.textContent;
+                }
+            }, { once: true });
+        }
+
+        /**
+         * Handles AI suggestions for current slide.
+         */
+        async function handleAiSuggestions() {
+            const slide = slides[currentSlideIndex];
+            const slideText = extractTextFromSlide(slide);
+
+            const systemPrompt = "You are a pitch deck consultant. Analyze this slide and provide 3 specific, actionable suggestions to improve it. Focus on clarity, impact, and persuasiveness. Format as bullet points.";
+            const userPrompt = `Improve this slide:\n\n${slideText}`;
+
+            showModal("Getting AI Suggestions...", "", true);
+
+            const { text } = await callGemini(systemPrompt, userPrompt, false);
+            const htmlContent = formatTextToHtml(text);
+
+            showModal("✨ Slide Improvement Suggestions", `<div>${htmlContent}</div>`);
+        }
 
         // --- EVENT LISTENERS ---
-        prevButton.addEventListener('click', () => {
-            if (currentSlideIndex > 0) {
-                currentSlideIndex--;
-                renderSlide(currentSlideIndex);
-            }
-        });
 
-        nextButton.addEventListener('click', () => {
-            if (currentSlideIndex < totalSlides - 1) {
-                currentSlideIndex++;
-                renderSlide(currentSlideIndex);
-            }
-        });
-        
+        // Navigation buttons
+        prevButton.addEventListener('click', prevSlide);
+        nextButton.addEventListener('click', nextSlide);
+
+        // Fullscreen navigation
+        fsPrevBtn.addEventListener('click', prevSlide);
+        fsNextBtn.addEventListener('click', nextSlide);
+        fsExitBtn.addEventListener('click', exitFullscreen);
+
+        // Speaker notes
         speakerNotesButton.addEventListener('click', handleGenerateSpeakerNotes);
-        
+
+        // Modal controls
         modalCloseButton.addEventListener('click', hideModal);
         modalOverlay.addEventListener('click', (e) => {
             if (e.target === modalOverlay) {
@@ -898,18 +2698,140 @@
             }
         });
 
+        // Thumbnail panel
+        thumbnailToggle.addEventListener('click', toggleThumbnailPanel);
+
+        // Timer controls
+        timerToggleBtn.addEventListener('click', toggleTimer);
+        timerResetBtn.addEventListener('click', resetTimer);
+
+        // Fullscreen button
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+        // Help button and overlay
+        helpBtn.addEventListener('click', showHelp);
+        helpOverlay.addEventListener('click', hideHelp);
+        helpOverlay.addEventListener('keydown', hideHelp);
+
+        // Touch/swipe support
+        slideContainer.addEventListener('touchstart', handleTouchStart, { passive: true });
+        slideContainer.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight') {
-                nextButton.click();
-            } else if (e.key === 'ArrowLeft') {
-                prevButton.click();
-            } else if (e.key === 'Escape') {
-                hideModal();
+            // Don't handle keys when modal is open (except Escape)
+            const modalVisible = modalOverlay.classList.contains('visible');
+            const helpVisible = helpOverlay.classList.contains('visible');
+
+            if (helpVisible) {
+                hideHelp();
+                return;
+            }
+
+            if (e.key === 'Escape') {
+                if (modalVisible) {
+                    hideModal();
+                } else if (document.body.classList.contains('fullscreen-mode')) {
+                    exitFullscreen();
+                }
+                return;
+            }
+
+            if (modalVisible) return;
+
+            switch (e.key) {
+                case 'ArrowRight':
+                case 'PageDown':
+                    nextSlide();
+                    break;
+                case 'ArrowLeft':
+                case 'PageUp':
+                    prevSlide();
+                    break;
+                case 'f':
+                case 'F':
+                    toggleFullscreen();
+                    break;
+                case 't':
+                case 'T':
+                    toggleThumbnailPanel();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    toggleTimer();
+                    break;
+                case '?':
+                    showHelp();
+                    break;
+                case 'Home':
+                    goToSlide(0);
+                    break;
+                case 'End':
+                    goToSlide(totalSlides - 1);
+                    break;
+                case 'c':
+                case 'C':
+                    toggleChatbot();
+                    break;
+                case 'n':
+                case 'N':
+                    showUploadModal();
+                    break;
+                case 'e':
+                case 'E':
+                    toggleEditorMode();
+                    break;
             }
         });
 
+        // Number keys to jump to slides (1-9)
+        document.addEventListener('keydown', (e) => {
+            const modalVisible = modalOverlay.classList.contains('visible');
+            const helpVisible = helpOverlay.classList.contains('visible');
+            if (modalVisible || helpVisible) return;
+
+            const num = parseInt(e.key);
+            if (!isNaN(num) && num >= 1 && num <= 9) {
+                goToSlide(num - 1);
+            }
+        });
+
+        // Chatbot
+        chatbotToggle.addEventListener('click', toggleChatbot);
+        chatbotClose.addEventListener('click', toggleChatbot);
+        chatbotForm.addEventListener('submit', handleChatSubmit);
+
+        // Upload modal
+        newDeckBtn.addEventListener('click', showUploadModal);
+        uploadModalClose.addEventListener('click', hideUploadModal);
+        uploadCancel.addEventListener('click', hideUploadModal);
+        uploadGenerate.addEventListener('click', generateDeck);
+
+        // Content drop zone
+        contentDropZone.addEventListener('click', () => contentFileInput.click());
+        contentFileInput.addEventListener('change', (e) => processFiles(Array.from(e.target.files), 'content'));
+        contentDropZone.addEventListener('dragover', (e) => { e.preventDefault(); contentDropZone.classList.add('dragover'); });
+        contentDropZone.addEventListener('dragleave', () => contentDropZone.classList.remove('dragover'));
+        contentDropZone.addEventListener('drop', (e) => handleFileDrop(e, 'content'));
+
+        // Branding drop zone
+        brandingDropZone.addEventListener('click', () => brandingFileInput.click());
+        brandingFileInput.addEventListener('change', (e) => processFiles(Array.from(e.target.files), 'branding'));
+        brandingDropZone.addEventListener('dragover', (e) => { e.preventDefault(); brandingDropZone.classList.add('dragover'); });
+        brandingDropZone.addEventListener('dragleave', () => brandingDropZone.classList.remove('dragover'));
+        brandingDropZone.addEventListener('drop', (e) => handleFileDrop(e, 'branding'));
+
+        // Editor mode
+        editModeBtn.addEventListener('click', toggleEditorMode);
+        editorExit.addEventListener('click', toggleEditorMode);
+        editorAiSuggest.addEventListener('click', handleAiSuggestions);
+
         // --- INITIAL RENDER ---
+        generateThumbnails();
         renderSlide(currentSlideIndex);
+
+        // Check for Klair MCP proxy on load
+        setTimeout(checkKlairConnection, 1000);
 
     </script>
 
